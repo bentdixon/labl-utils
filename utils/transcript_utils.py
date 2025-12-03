@@ -1,3 +1,4 @@
+import os
 import re
 from enum import Enum
 from functools import cached_property
@@ -45,6 +46,7 @@ class Transcript:
         self.filename: str = filename
         self.full_path: Path = Transcript.directory_path / filename
         self.group_status: ClinicalGroup = self.get_clinical_status()
+        self.patient_id = self._get_id()
         self.lines = self.get_text()
 
     @cached_property
@@ -63,6 +65,10 @@ class Transcript:
                 return ClinicalGroup.HC
         print(f"ClinicalGroup not found for {self.full_path}, defaulting to UNKNOWN")
         return ClinicalGroup.UNKNOWN
+
+    def _get_id(self) -> str:
+        patient_id = os.path.basename(self.full_path).split("_")[1]
+        return patient_id
 
     def get_text(self) -> list[TranscriptLine]:
         with open(self.full_path, 'r', encoding='utf-8') as f:
