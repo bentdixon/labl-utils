@@ -27,6 +27,21 @@ class Transcript:
     def set_directory_path(cls, path: str | Path) -> None:
         cls.directory_path = Path(path)
 
+    # TO-DO:
+    # Add class method to find all transcripts within a given directory for easy iteration
+    
+    @classmethod
+    def list_transcripts(cls) -> list:
+        transcripts = []
+
+        if cls.directory_path is None:
+            raise ValueError("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory.")
+        else:
+            for transcript in list(cls.directory_path.rglob('*.txt')):
+                transcripts.append(transcript)
+
+        return transcripts
+
     def __init__(self, filename: str):
         if Transcript.directory_path is None:
             raise ValueError("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory.")
