@@ -30,13 +30,13 @@ class Transcript:
 
     @classmethod
     def list_transcripts(cls) -> list:
-        transcripts = []
+        transcripts: list = []
 
         if cls.directory_path is None:
             raise ValueError("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory.")
         else:
             for transcript in list(cls.directory_path.rglob('*.txt')):
-                transcripts.append(transcript)
+                transcripts.append(Transcript(str(transcript)))
 
         return transcripts
 
@@ -47,7 +47,7 @@ class Transcript:
         self.full_path: Path = Transcript.directory_path / filename
         self.group_status: ClinicalGroup = self.get_clinical_status()
         self.patient_id = self._get_id()
-        self.lines = self.get_text()
+        self.lines = self._get_text()
 
     @cached_property
     def interviewer_lines(self) -> list[TranscriptLine]:
@@ -70,7 +70,7 @@ class Transcript:
         patient_id = os.path.basename(self.full_path).split("_")[1]
         return patient_id
 
-    def get_text(self) -> list[TranscriptLine]:
+    def _get_text(self) -> list[TranscriptLine]:
         with open(self.full_path, 'r', encoding='utf-8') as f:
             content = f.read()
         index: int = 0

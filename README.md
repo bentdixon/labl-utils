@@ -15,8 +15,8 @@ Transcript.set_directory_path("/data/transcripts")
 
 # Iterate through all transcripts
 for transcript in Transcript.list_transcripts():
-    t = Transcript(transcript)
-    print(t.filename)
+    print(transcript.filename)
+    print(len(transcript.participant_lines))
 
 # Define transcript objects
 t1 = Transcript("CHR/subject_001/interview.txt")
