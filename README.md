@@ -8,7 +8,7 @@ git clone https://github.com/bentdixon/labl-utils/tree/main
 ### Using TranscriptUtils
 
 ``` python
-from utils.transcript import Transcript, ClinicalGroup
+from utils.transcript_utils import Transcript, ClinicalGroup
 
 # Must set the transcript directory first, containing CHR and HC subdirectories
 Transcript.set_directory_path("/data/transcripts")
