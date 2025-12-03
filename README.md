@@ -13,6 +13,11 @@ from utils.transcript_utils import Transcript, ClinicalGroup
 # Must set the transcript directory first, containing CHR and HC subdirectories
 Transcript.set_directory_path("/data/transcripts")
 
+# Iterate through all transcripts
+for transcript in Transcript.list_transcripts():
+    t = Transcript(transcript)
+    print(t.filename)
+
 # Define transcript objects
 t1 = Transcript("CHR/subject_001/interview.txt")
 t2 = Transcript("HC/subject_042/interview.txt")
