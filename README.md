@@ -2,7 +2,7 @@
 
 ``` bash
 cd your-project
-git clone https://github.com/bentdixon/labl-utils/tree/main
+git clone https://github.com/bentdixon/labl-utils.git
 ```
 
 ### Using TranscriptUtils
