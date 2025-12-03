@@ -1,10 +1,10 @@
-Instructions
+## Instructions
 
 `cd your-project`
 
 `git clone https://github.com/bentdixon/labl-utils/tree/main`
 
-Using **TranscriptUtils**
+### Using **TranscriptUtils**
 
 `from utils.transcript import Transcript, ClinicalGroup`
 
