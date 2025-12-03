@@ -1,11 +1,13 @@
 ## Instructions
-```bash
+
+``` bash
 cd your-project
 git clone https://github.com/bentdixon/labl-utils/tree/main
 ```
 
 ### Using TranscriptUtils
-```python
+
+``` python
 from utils.transcript import Transcript, ClinicalGroup
 
 # Must set the transcript directory first, containing CHR and HC subdirectories
