@@ -1,11 +1,11 @@
 import polars as pl
 
 
-'''
+"""
 A function for combining CSV files with different column names.
 Joins on 'patient_id', and optionally, 'clinical_status' if available. 
 All other metrics columns follow. 
-'''
+"""
 def combine_csvs(csv_paths: list[str]) -> pl.DataFrame:
     """Load and join multiple CSVs on patient_id and clinical_status."""
     dataframes = [pl.read_csv(path) for path in csv_paths]

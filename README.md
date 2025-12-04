@@ -5,7 +5,7 @@ cd your-project
 git clone https://github.com/bentdixon/labl-utils.git
 ```
 
-### Using TranscriptUtils
+### Using `transcript_utils`
 
 ``` python
 from utils.transcript_utils import Transcript, ClinicalGroup
@@ -31,4 +31,18 @@ print(len(t1.interviewer_lines)) # Interviewer utterances only
 # Iterate over lines
 for line in t1.participant_lines:
     print(f"{line.line_number}: {line.timestamp} - {line.text}")
+```
+
+### Using `combine_data`
+
+``` python
+from utils.combine_data import combine_csvs
+import polars as pl
+
+# Expects CSV with `patient_id` column, optionally `clinical_status`, and then metric columns
+c1 = "some/path/data.csv" # `patient_id`, `metric_1`
+c2 = "some/path/data.csv" # `patient_id`, `clinical_status`, `_metric_2`
+
+# Results in combined Polars DataFrame with `patient_id`, `clinincal_status`, `metric_1`, `metric_2`, matched on `patient_id`
+combined_data = combine_csvs(c1, c2)
 ```
