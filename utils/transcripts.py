@@ -4,6 +4,7 @@ from enum import Enum
 from functools import cached_property
 from pathlib import Path
 from typing import NamedTuple
+from data import Language
 
 _TIMESTAMP_PATTERN = re.compile(r'(\d{2}:\d{2}:\d{2}\.\d{3})')
 
@@ -40,14 +41,22 @@ class Transcript:
 
         return transcripts
 
-    def __init__(self, filename: str):
+    def __init__(self, filename: str | Path):
         if Transcript.directory_path is None:
-            raise ValueError("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory.")
-        self.filename: str = filename
-        self.full_path: Path = Transcript.directory_path / filename
-        self.group_status: ClinicalGroup = self.get_clinical_status()
-        self.patient_id = self._get_id()
-        self.lines = self._get_text()
+            print("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory.")
+            self.filename: str | Path = filename
+            self.full_path: Path = Path(filename) # identical
+            self.group_status: ClinicalGroup = self._get_clinical_status()
+            self.patient_id = self._get_id()
+            self.lines = self._get_text()
+            self.language = self._get_language()
+        else:
+            self.filename: str | Path = filename
+            self.full_path: Path = Transcript.directory_path / filename
+            self.group_status: ClinicalGroup = self._get_clinical_status()
+            self.patient_id = self._get_id()
+            self.lines = self._get_text()
+            self.language = self._get_language()
 
     @cached_property
     def interviewer_lines(self) -> list[TranscriptLine]:
@@ -57,7 +66,13 @@ class Transcript:
     def participant_lines(self) -> list[TranscriptLine]:
         return [line for line in self.lines if line.speaker == "PARTICIPANT"]
 
-    def get_clinical_status(self) -> ClinicalGroup:
+    def _get_language(self) -> Language:
+        # use site codes
+        # if montreal, return unknown => allow for upstream processing to determine with stanza / spacy
+
+        return Language.kr  # pass
+
+    def _get_clinical_status(self) -> ClinicalGroup:
         for parent in self.full_path.parents:
             if parent.name.upper() == 'CHR':
                 return ClinicalGroup.CHR
@@ -93,6 +108,7 @@ class Transcript:
                 text = line.split(':', 1)[-1].strip()
             lines.append(TranscriptLine(index, speaker, timestamp, text))
         return lines
+
 
 """
 
