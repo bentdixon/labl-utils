@@ -37,7 +37,6 @@ for line in t1.participant_lines:
 
 ``` python
 from utils.combine_data import combine_csvs
-import polars as pl
 
 # Expects CSV with `patient_id` column, optionally `clinical_status`, and then metric columns
 c1 = "some/path/data.csv" # `patient_id`, `metric_1`
