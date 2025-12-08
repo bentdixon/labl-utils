@@ -10,6 +10,12 @@ def determine_language(transcript: Transcript) -> Language:
     text = "\n".join(line.text for line in transcript.lines)
     doc = cast(Document, nlp(text))
     try:
-        return Language[doc.lang] if doc.lang else Language.UNKNOWN
-    except KeyError:
+        if doc.lang:
+            return Language[doc.lang] 
+        else:
+            print(f"Language for {transcript.patient_id} could not be identified")
+            return Language.UNKNOWN
+    except KeyError as e:
+        print(f"Error {e}")
         return Language.UNKNOWN
+

@@ -4,7 +4,7 @@ from enum import Enum
 from functools import cached_property
 from pathlib import Path
 from typing import NamedTuple
-from data import Language
+from data.langs import Language, SITE_CODE_TO_LANGUAGES
 
 _TIMESTAMP_PATTERN = re.compile(r'(\d{2}:\d{2}:\d{2}\.\d{3})')
 
@@ -41,7 +41,7 @@ class Transcript:
 
         return transcripts
 
-    def __init__(self, filename: str | Path):
+    def __init__(self, filename: str | Path, text_type: str | None):
         if Transcript.directory_path is None:
             print("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory.")
             self.filename: str | Path = filename
@@ -49,14 +49,16 @@ class Transcript:
             self.group_status: ClinicalGroup = self._get_clinical_status()
             self.patient_id = self._get_id()
             self.lines = self._get_text()
-            self.language = self._get_language()
+            self.site = self._get_site()
+            self.language: Language | None = None  # None parameter to be used by other scripts
         else:
             self.filename: str | Path = filename
             self.full_path: Path = Transcript.directory_path / filename
             self.group_status: ClinicalGroup = self._get_clinical_status()
             self.patient_id = self._get_id()
             self.lines = self._get_text()
-            self.language = self._get_language()
+            self.site = self._get_site()
+            self.language: Language | None = None  # None parameter to be used by other scripts
 
     @cached_property
     def interviewer_lines(self) -> list[TranscriptLine]:
@@ -66,11 +68,14 @@ class Transcript:
     def participant_lines(self) -> list[TranscriptLine]:
         return [line for line in self.lines if line.speaker == "PARTICIPANT"]
 
-    def _get_language(self) -> Language:
-        # use site codes
-        # if montreal, return unknown => allow for upstream processing to determine with stanza / spacy
-
-        return Language.kr  # pass
+    def _get_site(self) -> str | None:
+        name: str = Path(self.filename).name
+        network_site: str | None = name.split("_")[0]
+        sites = SITE_CODE_TO_LANGUAGES.keys()
+        for site in sites:
+            if site in network_site:
+                return site
+        return None
 
     def _get_clinical_status(self) -> ClinicalGroup:
         for parent in self.full_path.parents:
@@ -78,7 +83,7 @@ class Transcript:
                 return ClinicalGroup.CHR
             elif parent.name.upper() == 'HC':
                 return ClinicalGroup.HC
-        print(f"ClinicalGroup not found for {self.full_path}, defaulting to UNKNOWN")
+        # print(f"ClinicalGroup not found for {self.full_path}, defaulting to UNKNOWN")
         return ClinicalGroup.UNKNOWN
 
     def _get_id(self) -> str:
@@ -97,8 +102,10 @@ class Transcript:
             index += 1
             if line.startswith('PARTICIPANT'):
                 speaker = "PARTICIPANT"
-            else:
+            elif line.startswith('INTERVIEWER'):
                 speaker = "INTERVIEWER"
+            else:
+                speaker = "UNKNOWN"
             match = _TIMESTAMP_PATTERN.search(line)
             if match:
                 timestamp = match.group(1)
@@ -108,26 +115,3 @@ class Transcript:
                 text = line.split(':', 1)[-1].strip()
             lines.append(TranscriptLine(index, speaker, timestamp, text))
         return lines
-
-
-"""
-
-from transcript import Transcript, ClinicalGroup
-
-Transcript.set_directory_path("/data//transcripts")
-
-t1 = Transcript("CHR/subject_001/interview.txt")
-t2 = Transcript("HC/subject_042/interview.txt")
-
-print(t1.group_status)           # ClinicalGroup.CHR
-print(len(t1.lines))             # Total line count
-print(len(t1.participant_lines)) # Participant utterances only
-
-for line in t1.participant_lines:
-    print(f"{line.line_number}: {line.timestamp} - {line.text}")
-
-# To iterate through all transcripts:
-for transcript in Transcript.list_transcripts():
-    t = Transcript(transcript)
-
-"""

@@ -48,7 +48,6 @@ SITE_CODE_TO_LANGUAGES: dict[str, tuple[Language, ...]] = {
     "UR": (Language.en,),
     # German
     "MU": (Language.de,),
-    "CG": (Language.de,),
     "JE": (Language.de,),
     # French
     "LS": (Language.fr,),
@@ -65,6 +64,7 @@ SITE_CODE_TO_LANGUAGES: dict[str, tuple[Language, ...]] = {
     # Multilingual sites
     "MT": (Language.en, Language.fr),
     "HK": (Language.yue, Language.zh, Language.en),
+    "CG": (Language.de, Language.en),
 }
 
 
