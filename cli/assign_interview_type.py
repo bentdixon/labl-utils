@@ -115,7 +115,6 @@ def classify_speaker_roles(
     
     response = tokenizer.decode(outputs[0][inputs['input_ids'].shape[1]:], skip_special_tokens=True)
     
-    # START REFACTOR HERE - EXTRACT INTERVIEW TYPE IN BRACES
     try:
         match = re.search(r'\{(OPEN|PSYCHS)\}', response, re.IGNORECASE)
         
@@ -123,15 +122,10 @@ def classify_speaker_roles(
             interview_type = match.group(1).upper()
             return interview_type
         
-        # Fallback: check if OPEN or PSYCHS appears anywhere in response
-        if re.search(r'\bOPEN\b', response, re.IGNORECASE):
-            return "OPEN"
-        elif re.search(r'\bPSYCHS\b', response, re.IGNORECASE):
-            return "PSYCHS"
-        
-        print(f"Failed to parse interview type in {transcript.patient_id} at {transcript.filename}: no valid type found in response")
-        return None
-            
+        else:
+            print(f"Failed to parse interview type in {transcript.patient_id} at {transcript.filename}: no valid type found in response")
+            return None
+                
     except (AttributeError, ValueError) as e:
         print(f"Failed to parse interview type in {transcript.patient_id} at {transcript.filename} due to error {e}")
         return None
@@ -154,7 +148,6 @@ def main() -> None:
 
     model, tokenizer = load_model()
     Transcript.set_directory_path(input_dir)
-
 
     failed: list[tuple[str, str]] = []
     open_transcripts: list[dict[str, str]] = []
