@@ -39,7 +39,7 @@ def load_model(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    print(f"Model loaded successfully")
+    print(f"Model {model_name} loaded successfully")
     return model, tokenizer
 
 
@@ -164,6 +164,7 @@ def main() -> None:
 
     for transcript in Transcript.list_transcripts():
         roles = classify_speaker_roles(transcript = transcript, thinking = thinking, model = model, tokenizer = tokenizer)
+        print(f"{roles} found for {transcript.filepath}")
         if roles is None:
             failed.append(transcript.filename)
         else:
@@ -182,8 +183,10 @@ def main() -> None:
 
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            
-
+    
+    # TO-DO: add error code with each filename as tuple
+    if failed:
+        print(f"The following files could not be parsed: {[file for file in failed]}")
 
 
 if __name__ == "__main__":
