@@ -30,18 +30,18 @@ class Transcript:
         cls.directory_path = Path(path)
 
     @classmethod
-    def list_transcripts(cls) -> list:
+    def list_transcripts(cls, text_type: str | None = None) -> list:
         transcripts: list = []
 
         if cls.directory_path is None:
             raise ValueError("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory.")
         else:
             for transcript in list(cls.directory_path.rglob('*.txt')):
-                transcripts.append(Transcript(str(transcript)))
+                transcripts.append(Transcript(transcript))
 
         return transcripts
 
-    def __init__(self, filename: str | Path, text_type: str | None):
+    def __init__(self, filename: str | Path, language: Language | None = None):
         if Transcript.directory_path is None:
             print("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory.")
             self.filename: str | Path = filename
@@ -50,7 +50,10 @@ class Transcript:
             self.patient_id = self._get_id()
             self.lines = self._get_text()
             self.site = self._get_site()
-            self.language: Language | None = None  # None parameter to be used by other scripts
+            self.language: Language | None = language
+            self.session = self._get_session()
+            self.day = self._get_day()
+            self.transcript_type = self._get_transcript_type()
         else:
             self.filename: str | Path = filename
             self.full_path: Path = Transcript.directory_path / filename
@@ -58,7 +61,10 @@ class Transcript:
             self.patient_id = self._get_id()
             self.lines = self._get_text()
             self.site = self._get_site()
-            self.language: Language | None = None  # None parameter to be used by other scripts
+            self.language: Language | None = language  
+            self.session = self._get_session()
+            self.day = self._get_day()
+            self.transcript_type = self._get_transcript_type()
 
     @cached_property
     def interviewer_lines(self) -> list[TranscriptLine]:
@@ -115,3 +121,17 @@ class Transcript:
                 text = line.split(':', 1)[-1].strip()
             lines.append(TranscriptLine(index, speaker, timestamp, text))
         return lines
+
+    def _get_session(self) -> str:
+        session = os.path.basename(self.full_path).split("_")[5] 
+        return session
+
+    def _get_day(self) -> str:
+        day = os.path.basename(self.full_path).split("_")[4]
+        return day
+
+    def _get_transcript_type(self) -> str:
+        transcript_type = os.path.basename(self.full_path).split("_")[3]
+        return transcript_type
+
+    
