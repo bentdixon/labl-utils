@@ -1,171 +1,260 @@
 """
 Decides type of interview for each transcript.
-Intended to be used for CONFIRMATION of interview type, rather than final decisions.  
+Intended to be used for CONFIRMATION of interview type, rather than final decisions.
+Uses vLLM for efficient batch inference.
 """
 
 import os
-os.environ["CUDA_DEVICE_ORDER"] = 'PCI_BUS_ID'
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
 import re
 import csv
-import torch
 import argparse
 from pathlib import Path
 from utils.transcripts import Transcript
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from vllm import LLM, SamplingParams
 
 
 def load_model(
     model_name: str = "openai/gpt-oss-120b",
-    device_map: str = "auto",
-    attention_impl: str = "kernels-community/vllm-flash-attn3"
-):
+    tensor_parallel_size: int = 1,
+    gpu_memory_utilization: float = 0.9,
+) -> LLM:
     """
-    Load LLM model and tokenizer.
+    Load LLM model using vLLM.
+    
     Args:
         model_name: HuggingFace model name
-        device_map: Device mapping strategy
-        attention_impl: Attention implementation to use
+        tensor_parallel_size: Number of GPUs for tensor parallelism
+        gpu_memory_utilization: Fraction of GPU memory to use
+    
     Returns:
-        Tuple of (model, tokenizer)
+        vLLM LLM instance
     """
     print(f"Loading LLM model: {model_name}...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype="auto",
-        device_map=device_map,
-        attn_implementation=attention_impl
+    
+    llm = LLM(
+        model=model_name,
+        tensor_parallel_size=tensor_parallel_size,
+        gpu_memory_utilization=gpu_memory_utilization,
+        max_model_len=80000,
+        dtype="auto",
+        trust_remote_code=True,
     )
     
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    
     print(f"Model {model_name} loaded successfully")
-    return model, tokenizer
+    return llm
 
 
-def classify_speaker_roles(
+def build_messages(
+    transcript_content: str,
+    thinking: str | None,
+) -> list[dict[str, str]]:
+    """
+    Build the chat messages for interview type classification.
+    
+    Args:
+        transcript_content: Truncated transcript text
+        thinking: Optional thinking/reasoning hint
+    
+    Returns:
+        List of message dicts for chat template
+    """
+    system_prompt = "You are a trained clinical annotator. Only respond in the format prescribed. Keep your reasoning succinct."
+    
+    user_prompt = f"""Analyze the following transcript excerpt and determine whether it is an OPEN or PSYCHS interview.
+
+The OPEN interviews typically:
+- Asks questions about the participant's experiences, thoughts, or feelings in a freely flowing format
+- Has no set structure or order
+
+The PSYCHS interviews typically:
+- Focuses on clinical symptoms such as anxiety, depression, hallucinations, paranoia, etc.
+- Has a linear progression
+
+Transcript:
+{transcript_content}
+
+Based on the conversation pattern, classify the interview type. Respond with exactly one line in this format:
+{{INTERVIEW_TYPE}} where INTERVIEW_TYPE is either OPEN or PSYCHS."""
+
+    if thinking is not None:
+        system_prompt = f"{system_prompt}\nReasoning approach: {thinking}"
+
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+
+def parse_interview_type(response: str) -> str | None:
+    """
+    Parse interview type from model response.
+    
+    Returns:
+        "OPEN" or "PSYCHS", or None on failure.
+    """
+    match = re.search(r"\{(OPEN|PSYCHS)\}", response, re.IGNORECASE)
+    
+    if match:
+        return match.group(1).upper()
+    
+    # Fallback: look for standalone OPEN or PSYCHS
+    match = re.search(r"\b(OPEN|PSYCHS)\b", response, re.IGNORECASE)
+    if match:
+        return match.group(1).upper()
+    
+    return None
+
+
+def classify_interview_type(
     transcript: Transcript,
-    model,
-    tokenizer,
+    llm: LLM,
+    sampling_params: SamplingParams,
     thinking: str | None,
     chars: int = 10000,
-    temperature: float = 0.2
 ) -> str | None:
     """
     Classify interview as OPEN or PSYCHS.
     
     Args:
-        transcript_sample: A sample of transcript lines
-        model: The language model
-        tokenizer: The tokenizer
-        temperature: Sampling temperature (lower = more deterministic)
+        transcript: Transcript object
+        llm: vLLM LLM instance
+        sampling_params: vLLM sampling parameters
+        thinking: Optional thinking/reasoning hint
+        chars: Amount of text passed to the model
     
     Returns:
-        String with either "OPEN" or "PSYCHS"
+        String with either "OPEN" or "PSYCHS", or None on failure
     """
-    with open(transcript.full_path, 'r', encoding='utf-8') as f:
+    with open(transcript.full_path, "r", encoding="utf-8") as f:
         content = f.read()[:chars]
 
-
-    if thinking is not None:
-        prompt = f"""Thinking: {thinking}. Analyze the following transcript excerpt and determine whether it is an OPEN or PSYCHS interview.
-
-    The OPEN interviews typically:
-    - Asks questions about the participant's experiences, thoughts, or feelings in a freely flowing format
-    - Has no set structure or order
-
-    The PSYCHS interviews typically:
-    - Focuses on clinical symptoms such as anxiety, depression, hallucinations, paranoia, etc.
-    - Has a linear progression
-
-    Transcript:
-    {content}
-
-    Based on the conversation pattern, classify the interview type. Respond with exactly one lines in this format:
-    {{INTERVIEW_TYPE}} where INTERVIEW_TYPE is either OPEN or PSYCHS."""
-    else:
-        prompt = f"""Analyze the following transcript excerpt and determine whether it is an OPEN or PSYCHS interview.
-
-    The OPEN interviews typically:
-    - Asks questions about the participant's experiences, thoughts, or feelings in a freely flowing format
-    - Has no set structure or order
-
-    The PSYCHS interviews typically:
-    - Focuses on clinical symptoms such as anxiety, depression, hallucinations, paranoia, etc.
-    - Has a linear progression
-
-    Transcript:
-    {content}
-
-    Based on the conversation pattern, classify the interview type. Respond with exactly one lines in this format:
-    {{INTERVIEW_TYPE}} where INTERVIEW_TYPE is either OPEN or PSYCHS."""
+    messages = build_messages(content, thinking)
     
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    outputs = llm.chat(
+        messages=[messages],
+        sampling_params=sampling_params,
+        use_tqdm=False,
+    )
     
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=100,
-            temperature=temperature,
-            do_sample=True,
-            pad_token_id=tokenizer.pad_token_id
+    response = outputs[0].outputs[0].text.strip()
+    print(f"\n{transcript.filename} --->\n{response}\n")
+    
+    interview_type = parse_interview_type(response)
+    
+    if interview_type is None:
+        print(
+            f"Failed to parse interview type in {transcript.patient_id} at "
+            f"{transcript.filename}: no valid type found in response"
         )
     
-    response = tokenizer.decode(outputs[0][inputs['input_ids'].shape[1]:], skip_special_tokens=True)
+    return interview_type
+
+
+def classify_batch(
+    transcripts: list[Transcript],
+    llm: LLM,
+    sampling_params: SamplingParams,
+    thinking: str | None,
+    chars: int = 10000,
+) -> list[tuple[Transcript, str | None]]:
+    """
+    Classify interview types for a batch of transcripts.
     
-    try:
-        match = re.search(r'\{(OPEN|PSYCHS)\}', response, re.IGNORECASE)
+    Args:
+        transcripts: List of Transcript objects
+        llm: vLLM LLM instance
+        sampling_params: vLLM sampling parameters
+        thinking: Optional thinking/reasoning hint
+        chars: Amount of text passed to the model
+    
+    Returns:
+        List of (transcript, interview_type) tuples
+    """
+    all_messages = []
+    for transcript in transcripts:
+        with open(transcript.full_path, "r", encoding="utf-8") as f:
+            content = f.read()[:chars]
+        messages = build_messages(content, thinking)
+        all_messages.append(messages)
+    
+    outputs = llm.chat(
+        messages=all_messages,
+        sampling_params=sampling_params,
+        use_tqdm=True,
+    )
+    
+    results = []
+    for transcript, output in zip(transcripts, outputs):
+        response = output.outputs[0].text.strip()
+        print(f"\n{transcript.filename} --->\n{response}\n")
         
-        if match:
-            interview_type = match.group(1).upper()
-            return interview_type
+        interview_type = parse_interview_type(response)
         
-        else:
-            print(f"Failed to parse interview type in {transcript.patient_id} at {transcript.filename}: no valid type found in response")
-            return None
-                
-    except (AttributeError, ValueError) as e:
-        print(f"Failed to parse interview type in {transcript.patient_id} at {transcript.filename} due to error {e}")
-        return None
+        if interview_type is None:
+            print(
+                f"Failed to parse interview type in {transcript.patient_id} at "
+                f"{transcript.filename}: no valid type found in response"
+            )
+        
+        results.append((transcript, interview_type))
+    
+    return results
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Decide roles in clinicalinterview",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        description="Decide interview type (OPEN or PSYCHS)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--i", type=str, required=True, help="Input directory")
-    parser.add_argument("--o", type=str, required=False, help="Output directory")
-    parser.add_argument("--thinking", type=str, required=False, default = None, help="Thinking parameter for GPT-OSS")
-    parser.add_argument("--gpu", type=int, required=True)
+    parser.add_argument("--o", type=str, required=True, help="Output directory")
+    parser.add_argument(
+        "--thinking",
+        type=str,
+        required=False,
+        default=None,
+        help="Thinking parameter for reasoning hint",
+    )
+    parser.add_argument("--gpu", type=int, required=True, help="GPU device ID")
+    parser.add_argument(
+        "--tp",
+        type=int,
+        default=1,
+        help="Tensor parallel size (number of GPUs)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="Batch size for inference (1 for sequential, >1 for batched)",
+    )
     args = parser.parse_args()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     input_dir = Path(args.i)
-    output_dir = Path(args.o) if args.o else None
+    output_dir = Path(args.o)
     thinking = args.thinking
 
-    model, tokenizer = load_model()
-    Transcript.set_directory_path(input_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
+    llm = load_model(tensor_parallel_size=args.tp)
+    
+    sampling_params = SamplingParams(
+        max_tokens=200,
+        temperature=0.0,  # Deterministic output
+    )
+    
+    Transcript.set_directory_path(input_dir)
+    transcripts = list(Transcript.list_transcripts())
+    
     failed: list[tuple[str, str]] = []
     open_transcripts: list[dict[str, str]] = []
     psychs_transcripts: list[dict[str, str]] = []
 
-    if output_dir is None:
-        print("Error: Output directory (--o) is required for CSV output.")
-        return
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    for transcript in Transcript.list_transcripts():
-        interview_type = classify_speaker_roles(
-            transcript=transcript,
-            thinking=thinking,
-            model=model,
-            tokenizer=tokenizer
-        )
+    def process_result(transcript: Transcript, interview_type: str | None) -> None:
+        """Process a single classification result."""
         print(f"{interview_type} found for {transcript.full_path}")
 
         if interview_type is None:
@@ -173,19 +262,43 @@ def main() -> None:
         elif interview_type == "OPEN":
             open_transcripts.append({
                 "patient_id": transcript.patient_id,
-                "filename": str(transcript.full_path)
+                "filename": str(transcript.full_path),
             })
         elif interview_type == "PSYCHS":
             psychs_transcripts.append({
                 "patient_id": transcript.patient_id,
-                "filename": str(transcript.full_path)
+                "filename": str(transcript.full_path),
             })
         else:
             failed.append((str(transcript.filename), f"Unknown interview type: {interview_type}"))
 
+    if args.batch_size > 1:
+        # Batched processing
+        for i in range(0, len(transcripts), args.batch_size):
+            batch = transcripts[i : i + args.batch_size]
+            results = classify_batch(
+                transcripts=batch,
+                llm=llm,
+                sampling_params=sampling_params,
+                thinking=thinking,
+            )
+            
+            for transcript, interview_type in results:
+                process_result(transcript, interview_type)
+    else:
+        # Sequential processing
+        for transcript in transcripts:
+            interview_type = classify_interview_type(
+                transcript=transcript,
+                llm=llm,
+                sampling_params=sampling_params,
+                thinking=thinking,
+            )
+            process_result(transcript, interview_type)
+
     # Write OPEN CSV
     open_csv_path = output_dir / "open_interviews.csv"
-    with open(open_csv_path, 'w', newline='', encoding='utf-8') as f:
+    with open(open_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["patient_id", "filename"])
         writer.writeheader()
         writer.writerows(open_transcripts)
@@ -193,7 +306,7 @@ def main() -> None:
 
     # Write PSYCHS CSV
     psychs_csv_path = output_dir / "psychs_interviews.csv"
-    with open(psychs_csv_path, 'w', newline='', encoding='utf-8') as f:
+    with open(psychs_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["patient_id", "filename"])
         writer.writeheader()
         writer.writerows(psychs_transcripts)
@@ -202,7 +315,7 @@ def main() -> None:
     # Report failures
     if failed:
         failed_csv_path = output_dir / "failed_classification.csv"
-        with open(failed_csv_path, 'w', newline='', encoding='utf-8') as f:
+        with open(failed_csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=["filename", "error"])
             writer.writeheader()
             writer.writerows([{"filename": fn, "error": err} for fn, err in failed])
