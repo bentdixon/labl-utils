@@ -50,7 +50,7 @@ class Transcript:
             self.patient_id = self._get_id()
             self.lines = self._get_text()
             self.site = self._get_site()
-            self.language: Language | None = language
+            self.language = self._get_language()
             self.session = self._get_session()
             self.day = self._get_day()
             self.transcript_type = self._get_transcript_type()
@@ -61,7 +61,7 @@ class Transcript:
             self.patient_id = self._get_id()
             self.lines = self._get_text()
             self.site = self._get_site()
-            self.language: Language | None = language  
+            self.language = self._get_language()
             self.session = self._get_session()
             self.day = self._get_day()
             self.transcript_type = self._get_transcript_type()
@@ -134,4 +134,9 @@ class Transcript:
         transcript_type = os.path.basename(self.full_path).split("_")[3]
         return transcript_type
 
-    
+    def _get_language(self) -> Language:
+        for parent in self.full_path.parents:
+            for lang in Language:
+                if f"Language.{lang.name}" == parent.name:
+                    return lang
+        return Language.UNKNOWN
