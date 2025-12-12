@@ -95,9 +95,13 @@ class Transcript:
         # print(f"ClinicalGroup not found for {self.full_path}, defaulting to UNKNOWN")
         return ClinicalGroup.UNKNOWN
 
-    def _get_id(self) -> str:
-        patient_id = os.path.basename(self.full_path).split("_")[1]
-        return patient_id
+    def _get_id(self) -> str | None:
+        try:
+            patient_id = os.path.basename(self.full_path).split("_")[1]
+            return patient_id
+        except IndexError as e:
+            print(f"Error: {e}\nTranscript: {self.filename}")
+            return None
 
     def _get_text(self) -> list[TranscriptLine]:
         with open(self.full_path, 'r', encoding='utf-8') as f:
@@ -125,21 +129,37 @@ class Transcript:
             lines.append(TranscriptLine(index, speaker, timestamp, text))
         return lines
 
-    def _get_session(self) -> str:
-        session = os.path.basename(self.full_path).split("_")[5] 
-        return session
+    def _get_session(self) -> str | None:
+        try:
+            session = os.path.basename(self.full_path).split("_")[5] 
+            return session
+        except IndexError as e:
+            print(f"Error: {e}\nTranscript: {self.filename}")
+            return None
 
-    def _get_day(self) -> str:
-        day = os.path.basename(self.full_path).split("_")[4]
-        return day
+    def _get_day(self) -> str | None:
+        try:    
+            day = os.path.basename(self.full_path).split("_")[4]
+            return day
+        except IndexError as e:
+            print(f"Error: {e}\nTranscript: {self.filename}")
+            return None
 
-    def _get_transcript_type(self) -> str:
-        transcript_type = os.path.basename(self.full_path).split("_")[3]
-        return transcript_type
+    def _get_transcript_type(self) -> str | None:
+        try:
+            transcript_type = os.path.basename(self.full_path).split("_")[3]
+            return transcript_type
+        except IndexError as e:
+            print(f"Error: {e}\nTranscript: {self.filename}")
+            return None
 
     def _get_language(self) -> Language:
-        for parent in self.full_path.parents:
-            for lang in Language:
-                if f"Language.{lang.name}" == parent.name:
-                    return lang
-        return Language.UNKNOWN
+        try:
+            for parent in self.full_path.parents:
+                for lang in Language:
+                    if f"Language.{lang.name}" == parent.name:
+                        return lang
+            return Language.UNKNOWN
+        except IndexError as e:
+            print(f"Error: {e}\nTranscript: {self.filename}")
+            return Language.UNKNOWN
