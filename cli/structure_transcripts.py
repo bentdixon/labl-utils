@@ -108,8 +108,8 @@ def set_language(transcript: Transcript) -> None:
             print(f"transcript: {transcript.filename}")
             print(f"transcript: {transcript.site}")
             print(f"languages in site: {langs}")
-            exit(1)
             transcript.language = Language.UNKNOWN
+            print("Continuing...")
 
 
 def structure_transcripts(

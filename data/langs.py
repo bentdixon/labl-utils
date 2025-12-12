@@ -58,13 +58,13 @@ SITE_CODE_TO_LANGUAGES: dict[str, tuple[Language, ...]] = {
     "GW": (Language.ko,),
     "SL": (Language.ko,),
     # Mandarin
-    "SH": (Language.zh,),
+    "SH": (Language.zh, Language.cn),
     # Spanish
     "MA": (Language.es,),
     "ST": (Language.es,),
     # Multilingual sites
     "MT": (Language.en, Language.fr),
-    "HK": (Language.yue, Language.zh, Language.en),
+    "HK": (Language.yue, Language.zh, Language.en, Language.cn),
     "CG": (Language.de, Language.en),
 }
 
