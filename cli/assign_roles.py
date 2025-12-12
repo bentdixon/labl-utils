@@ -22,6 +22,51 @@ from utils.transcripts import Transcript
 from vllm import LLM, SamplingParams
 
 
+def normalize_speaker_labels(content: str) -> tuple[str, dict[str, str]]:
+    """
+    Normalize speaker labels to S1, S2, S3 format.
+    Handles both standard (S1, S2, S3) and alternative formats (SI, SP, etc.).
+
+    Returns:
+        Tuple of (normalized_content, mapping_dict)
+        mapping_dict maps normalized labels (S1, S2) back to original labels (SI, SP)
+    """
+    # Find all unique speaker labels at start of lines
+    speaker_pattern = r'^(S[IP\d]+):'
+    speakers = set(re.findall(speaker_pattern, content, re.MULTILINE))
+
+    # If all speakers are already in S1, S2, S3 format, no normalization needed
+    if all(re.match(r'^S[123]$', s) for s in speakers):
+        return content, {}
+
+    # Create mapping: SI -> S1, SP -> S2, or other speakers to S1, S2, S3
+    mapping = {}
+    reverse_mapping = {}
+    normalized_labels = ['S1', 'S2', 'S3']
+
+    # Sort speakers for consistent mapping (SI before SP, etc.)
+    sorted_speakers = sorted(speakers)
+
+    for i, original in enumerate(sorted_speakers):
+        if i < len(normalized_labels):
+            normalized = normalized_labels[i]
+            mapping[original] = normalized
+            reverse_mapping[normalized] = original
+
+    # Replace speaker labels in content
+    normalized_content = content
+    for original, normalized in mapping.items():
+        # Use word boundary to avoid partial matches
+        normalized_content = re.sub(
+            rf'^{re.escape(original)}:',
+            f'{normalized}:',
+            normalized_content,
+            flags=re.MULTILINE
+        )
+
+    return normalized_content, reverse_mapping
+
+
 def load_model(
     model_name: str = "openai/gpt-oss-120b",
     tensor_parallel_size: int = 1,
@@ -140,43 +185,49 @@ def classify_speaker_roles(
     sampling_params: SamplingParams,
     thinking: str | None,
     chars: int = 5000,
-) -> dict[str, str] | None:
+) -> tuple[dict[str, str], dict[str, str]] | tuple[None, None]:
     """
     Classify speaker labels as PARTICIPANT or INTERVIEWER.
-    
+
     Args:
         transcript: Transcript object
         llm: vLLM LLM instance
         sampling_params: vLLM sampling parameters
         thinking: Optional thinking/reasoning hint
         chars: Amount of text passed to the model
-    
+
     Returns:
-        Dictionary mapping speaker labels to roles, or None on failure
+        Tuple of (roles_dict, label_mapping) or (None, None) on failure
+        roles_dict maps normalized labels (S1, S2) to roles (INTERVIEWER, PARTICIPANT)
+        label_mapping maps normalized labels (S1, S2) to original labels (SI, SP)
     """
     with open(transcript.full_path, "r", encoding="utf-8") as f:
         content = f.read()[:chars]
 
-    messages = build_messages(content, thinking)
-    
+    # Normalize speaker labels
+    normalized_content, label_mapping = normalize_speaker_labels(content)
+
+    messages = build_messages(normalized_content, thinking)
+
     outputs = llm.chat(
         messages=[messages],
         sampling_params=sampling_params,
         use_tqdm=False,
     )
-    
+
     response = outputs[0].outputs[0].text.strip()
     print(f"\n{transcript.filename} --->\n{response}\n")
-    
+
     roles = parse_roles(response)
-    
+
     if roles is None:
         print(
             f"Failed to parse roles in {transcript.patient_id} at "
             f"{transcript.filename} due to failed validation"
         )
-    
-    return roles
+        return None, None
+
+    return roles, label_mapping
 
 
 def classify_batch(
@@ -185,66 +236,90 @@ def classify_batch(
     sampling_params: SamplingParams,
     thinking: str | None,
     chars: int = 5000,
-) -> list[tuple[Transcript, dict[str, str] | None]]:
+) -> list[tuple[Transcript, dict[str, str] | None, dict[str, str]]]:
     """
     Classify speaker roles for a batch of transcripts.
-    
+
     vLLM efficiently batches multiple requests, so this is more efficient
     than processing one at a time.
-    
+
     Args:
         transcripts: List of Transcript objects
         llm: vLLM LLM instance
         sampling_params: vLLM sampling parameters
         thinking: Optional thinking/reasoning hint
         chars: Amount of text passed to the model
-    
+
     Returns:
-        List of (transcript, roles) tuples
+        List of (transcript, roles, label_mapping) tuples
     """
     all_messages = []
+    all_mappings = []
+
     for transcript in transcripts:
         with open(transcript.full_path, "r", encoding="utf-8") as f:
             content = f.read()[:chars]
-        messages = build_messages(content, thinking)
+
+        # Normalize speaker labels
+        normalized_content, label_mapping = normalize_speaker_labels(content)
+        messages = build_messages(normalized_content, thinking)
         all_messages.append(messages)
-    
+        all_mappings.append(label_mapping)
+
     outputs = llm.chat(
         messages=all_messages,
         sampling_params=sampling_params,
         use_tqdm=True,
     )
-    
+
     results = []
-    for transcript, output in zip(transcripts, outputs):
+    for transcript, output, label_mapping in zip(transcripts, outputs, all_mappings):
         response = output.outputs[0].text.strip()
         print(f"\n{transcript.filename} --->\n{response}\n")
-        
+
         roles = parse_roles(response)
-        
+
         if roles is None:
             print(
                 f"Failed to parse roles in {transcript.patient_id} at "
                 f"{transcript.filename} due to failed validation"
             )
-        
-        results.append((transcript, roles))
-    
+
+        results.append((transcript, roles, label_mapping))
+
     return results
 
 
 def _write_output(
     transcript: Transcript,
     roles: dict[str, str],
+    label_mapping: dict[str, str],
     input_dir: Path,
     output_dir: Path | None,
 ) -> None:
-    """Write the transcript with replaced speaker labels."""
+    """
+    Write the transcript with replaced speaker labels.
+
+    Args:
+        transcript: Transcript object
+        roles: Dict mapping normalized labels (S1, S2) to roles (INTERVIEWER, PARTICIPANT)
+        label_mapping: Dict mapping normalized labels (S1, S2) to original labels (SI, SP)
+        input_dir: Input directory path
+        output_dir: Optional output directory path
+    """
     with open(transcript.full_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    for speaker, role in roles.items():
-        content = re.sub(rf"^{speaker}:", f"{role}:", content, flags=re.MULTILINE)
+    # Map normalized labels to roles, then replace original labels with roles
+    for normalized_label, role in roles.items():
+        # Get the original label (SI, SP, etc.) or use normalized if no mapping
+        original_label = label_mapping.get(normalized_label, normalized_label)
+        content = re.sub(
+            rf"^{re.escape(original_label)}:",
+            f"{role}:",
+            content,
+            flags=re.MULTILINE
+        )
 
     if output_dir:
         relative_path = transcript.full_path.relative_to(input_dir)
@@ -312,17 +387,17 @@ def main() -> None:
                 sampling_params=sampling_params,
                 thinking=thinking,
             )
-            
-            for transcript, roles in results:
+
+            for transcript, roles, label_mapping in results:
                 print(f"{roles} found for {transcript.filename}")
                 if roles is None:
                     failed.append(transcript.filename)
                 else:
-                    _write_output(transcript, roles, input_dir, output_dir)
+                    _write_output(transcript, roles, label_mapping, input_dir, output_dir)
     else:
         # Sequential processing (original behavior)
         for transcript in transcripts:
-            roles = classify_speaker_roles(
+            roles, label_mapping = classify_speaker_roles(
                 transcript=transcript,
                 llm=llm,
                 sampling_params=sampling_params,
@@ -332,7 +407,7 @@ def main() -> None:
             if roles is None:
                 failed.append(transcript.filename)
             else:
-                _write_output(transcript, roles, input_dir, output_dir)
+                _write_output(transcript, roles, label_mapping, input_dir, output_dir)
 
     if failed:
         log_dir = output_dir if output_dir else input_dir
