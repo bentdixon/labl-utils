@@ -4,7 +4,15 @@ Uses vLLM for efficient batch inference.
 """
 
 import os
+import sys
+
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+
+# Set GPU before any CUDA imports
+if '--gpu' in sys.argv:
+    gpu_idx = sys.argv.index('--gpu')
+    if gpu_idx + 1 < len(sys.argv):
+        os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[gpu_idx + 1]
 
 import re
 import csv
@@ -278,7 +286,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     input_dir = Path(args.i)
     output_dir = Path(args.o) if args.o else None
     thinking = args.thinking

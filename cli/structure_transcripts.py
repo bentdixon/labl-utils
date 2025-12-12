@@ -1,8 +1,8 @@
 """
 CLI tool - takes a directory path of unlabeled transcripts (by language and clinical status) as input
-and creates a properly structured directory in a target location passed as an argument. 
+and creates a properly structured directory in a target location passed as an argument.
 
-CSV input allows for external CSV with 'patient_id' and 'clinical_status' columns to be used 
+CSV input allows for external CSV with 'patient_id' and 'clinical_status' columns to be used
 for external determination of group status if not availabile from pathname.
 
 Pretty-prints output location and structure first to user, asking for confirmation.
@@ -22,7 +22,15 @@ Output structure:
 
 """
 import os
+import sys
+
 os.environ["CUDA_DEVICE_ORDER"] = 'PCI_BUS_ID'
+
+# Set GPU before any CUDA imports
+if '--gpu' in sys.argv:
+    gpu_idx = sys.argv.index('--gpu')
+    if gpu_idx + 1 < len(sys.argv):
+        os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[gpu_idx + 1]
 
 import csv
 from pathlib import Path
@@ -208,7 +216,6 @@ def main() -> None:
     parser.add_argument("--gpu", type=int, required=True)
     args = parser.parse_args()
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     input_path = Path(args.i)
     output_path = Path(args.o)
 
