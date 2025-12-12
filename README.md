@@ -4,7 +4,7 @@
 cd your-project
 git clone https://github.com/bentdixon/labl-utils.git
 cd labl-utils
-pip install -e .
+pip install -e .  # OR, pip install -e . --no-deps
 ```
 
 ## Using `utils/`
