@@ -3,6 +3,8 @@
 ``` bash
 cd your-project
 git clone https://github.com/bentdixon/labl-utils.git
+cd labl-utils
+pip install -e .
 ```
 
 ## Using `utils/`
@@ -58,15 +60,27 @@ combined_data = combine_csvs(c1, c2)
 
 ## Using `cli/`
 
-Example usages of command line interface tools in the `cli/` subfolder.
-
 ### `assign_roles.py`
 
-Uses GPT-OSS to decide PARTICIPANT and INTERVIEWER speaker tags. Optional thinking flag to configure length of thinking. Flag to change model coming soon. Output directory is optional, will replace S1 and S2 in-place if not given, else it will create a new directory at specified location and copy transcripts.
+Classifies PARTICIPANT and INTERVIEWER speaker tags using vLLM batch inference.
 
-``` console
-(env) user@gpu:/data/labl-utils$ python cli/assign_roles.py --i "some/directory/with/transcripts/" --o "some/other/location" --thinking "high" --gpu {0-6}
+``` bash
+python cli/assign_roles.py --i "input/transcripts/" --o "output/" --thinking "medium" --gpu 0 --tp 1 --batch-size 32
+```
+
+### `assign_interview_type.py`
+
+Classifies interview type as OPEN or PSYCHS using vLLM batch inference.
+
+``` bash
+python cli/assign_interview_type.py --i "input/transcripts/" --o "output/" --thinking "medium" --gpu 0 --tp 1 --batch-size 32
 ```
 
 ### `structure_transcripts.py`
 
+Organizes transcripts by language and clinical status. Optionally uses CSV for clinical status mapping.
+
+``` bash
+python cli/structure_transcripts.py --i "input/transcripts/" --o "output/" --text-type "open" --gpu 0
+python cli/structure_transcripts.py --i "input/" --o "output/" --text-type "psychs" --csv "status.csv" --gpu 0
+```
