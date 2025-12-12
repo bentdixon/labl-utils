@@ -4,6 +4,7 @@
 cd your-project
 git clone https://github.com/bentdixon/labl-utils.git
 cd labl-utils
+# Make new virtual environment (Conda or Venv, etc.), or use pre-existing environment. If using pre-existing, use --no-deps. If creating new, use default.
 pip install -e .  # OR, pip install -e . --no-deps
 ```
 
