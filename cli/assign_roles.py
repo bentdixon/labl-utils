@@ -22,6 +22,21 @@ from utils.transcripts import Transcript
 from vllm import LLM, SamplingParams
 
 
+def is_already_labeled(transcript: Transcript) -> bool:
+    """
+    Check if transcript is already labeled with PARTICIPANT and INTERVIEWER.
+
+    Returns True if both labels are present, False otherwise.
+    """
+    with open(transcript.full_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    has_participant = bool(re.search(r'^PARTICIPANT:', content, re.MULTILINE))
+    has_interviewer = bool(re.search(r'^INTERVIEWER:', content, re.MULTILINE))
+
+    return has_participant and has_interviewer
+
+
 def normalize_speaker_labels(content: str) -> tuple[str, dict[str, str]]:
     """
     Normalize speaker labels to S1, S2, S3 format.
@@ -373,8 +388,15 @@ def main() -> None:
     )
     
     Transcript.set_directory_path(input_dir)
-    transcripts = list(Transcript.list_transcripts())
-    
+    all_transcripts = list(Transcript.list_transcripts())
+
+    # Filter out already-labeled transcripts
+    transcripts = [t for t in all_transcripts if not is_already_labeled(t)]
+    skipped = len(all_transcripts) - len(transcripts)
+
+    if skipped > 0:
+        print(f"Skipping {skipped} already-labeled transcript(s)")
+
     failed = []
 
     if args.batch_size > 1:
