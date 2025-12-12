@@ -11,6 +11,8 @@ def determine_language(transcript: Transcript) -> Language:
     doc = cast(Document, nlp(text))
     try:
         if doc.lang:
+            if doc.lang in ["yue", "zh", "zh-hans", "zh-hant"]:  # Part of temporary fix - returns "Chinese" for all possible languages under Chinese umbrella
+                return Language.cn
             return Language[doc.lang] 
         else:
             print(f"Language for {transcript.patient_id} could not be identified")
