@@ -24,6 +24,7 @@ class TranscriptLine(NamedTuple):
 
 class Transcript:
     directory_path: Path | None = None
+    _warning_shown: bool = False
 
     @classmethod
     def set_directory_path(cls, path: str | Path) -> None:
@@ -43,7 +44,9 @@ class Transcript:
 
     def __init__(self, filename: str | Path, language: Language | None = None):
         if Transcript.directory_path is None:
-            print("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory.")
+            if not Transcript._warning_shown:
+                print("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory. (This warning will only display once.)")
+                Transcript._warning_shown = True
             self.filename: str | Path = filename
             self.full_path: Path = Path(filename) # identical
             self.group_status: ClinicalGroup = self._get_clinical_status()
