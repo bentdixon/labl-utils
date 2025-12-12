@@ -14,6 +14,7 @@ class Language(Enum):
     de = "German"
     fr = "French"
     yue = "Cantonese"
+    cn = "Chinese"  # NOT a valid Stanza language code - only a temporary fix for handling broken Chinese transcripts
 
 
 SITE_CODE_TO_LANGUAGES: dict[str, tuple[Language, ...]] = {
