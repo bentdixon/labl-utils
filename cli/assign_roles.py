@@ -335,7 +335,8 @@ def main() -> None:
                 _write_output(transcript, roles, input_dir, output_dir)
 
     if failed:
-        output_path = Path(args.o) / "logs" / "failed_files.csv"
+        log_dir = output_dir if output_dir else input_dir
+        output_path = log_dir / "logs" / "failed_files.csv"
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         print(f"The following files could not be parsed: {failed}")
