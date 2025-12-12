@@ -121,7 +121,7 @@ def structure_transcripts(
     output_struct: dict[str, dict[str, dict[str, list[Transcript]]]] = {}
 
     for t in txt_files:
-        transcript = Transcript(t, text_type=text_type)
+        transcript = Transcript(t)
         set_clinical_status(transcript, status_map)
         set_language(transcript)
         
