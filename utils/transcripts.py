@@ -88,9 +88,9 @@ class Transcript:
 
     def _get_clinical_status(self) -> ClinicalGroup:
         for parent in self.full_path.parents:
-            if parent.name.upper() == 'CHR':
+            if 'CHR' in parent.name.upper():
                 return ClinicalGroup.CHR
-            elif parent.name.upper() == 'HC':
+            elif 'HC' in parent.name.upper():
                 return ClinicalGroup.HC
         # print(f"ClinicalGroup not found for {self.full_path}, defaulting to UNKNOWN")
         return ClinicalGroup.UNKNOWN
