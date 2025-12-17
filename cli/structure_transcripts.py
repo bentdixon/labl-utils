@@ -177,10 +177,22 @@ def build_tree(
     return tree
 
 
-def copy_files(
+def transfer_files(
     output_struct: dict[str, dict[str, dict[str, list[Transcript]]]],
-    outpath: Path
+    outpath: Path,
+    move: bool = False
 ) -> None:
+    """
+    Transfer files to the organized directory structure.
+    
+    Args:
+        output_struct: Nested dict of transcripts organized by type/language/group
+        outpath: Target output directory
+        move: If True, move files; if False, copy files
+    """
+    operation = shutil.move if move else shutil.copy2
+    op_name = "moved" if move else "copied"
+
     for text_type, languages in output_struct.items():
         for lang_name, groups in languages.items():
             for group_name, transcripts in groups.items():
@@ -199,9 +211,9 @@ def copy_files(
                             dst = target_dir / f"{stem}_{counter}{suffix}"
                             counter += 1
 
-                    shutil.copy2(src, dst)
+                    operation(src, dst)
 
-    console.print(f"\n[bold green]Files copied to {outpath}[/bold green]")
+    console.print(f"\n[bold green]Files {op_name} to {outpath}[/bold green]")
 
 
 def main() -> None:
@@ -210,14 +222,20 @@ def main() -> None:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--i", type=str, required=True, help="Input directory")
-    parser.add_argument("--o", type=str, required=True, help="Output directory")
+    parser.add_argument("--o", type=str, required=False, default=None,
+                        help="Output directory (default: reorganize in-place within input directory)")
     parser.add_argument("--csv", type=str, required=False, help="CSV with patient_id and clinical_status columns")
     parser.add_argument("--text-type", type=str, required=True, help="Transcript text type")
     parser.add_argument("--gpu", type=int, required=True)
     args = parser.parse_args()
 
     input_path = Path(args.i)
-    output_path = Path(args.o)
+
+    in_place = args.o is None
+    if in_place:
+        output_path = input_path
+    else:
+        output_path = Path(args.o)
 
     csv_path = None
     if args.csv is not None:
@@ -240,10 +258,14 @@ def main() -> None:
     tree = build_tree(output_struct, output_path)
     console.print(tree)
 
-    console.print(f"\n[bold]Target:[/bold] {output_path.resolve()}\n")
+    console.print(f"\n[bold]Target:[/bold] {output_path.resolve()}")
+    if in_place:
+        console.print("[yellow]Mode: in-place (files will be moved)[/yellow]\n")
+    else:
+        console.print("[dim]Mode: copy to separate directory[/dim]\n")
 
-    if Confirm.ask("Proceed with copy?"):
-        copy_files(output_struct, output_path)
+    if Confirm.ask("Proceed?"):
+        transfer_files(output_struct, output_path, move=in_place)
     else:
         console.print("[yellow]Operation cancelled.[/yellow]")
 
