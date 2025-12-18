@@ -177,6 +177,8 @@ def main() -> None:
                         help="GPU device ID to use")
     parser.add_argument("--batch_size", type=int, default=400,
                         help="Batch size for Stanza dependency parsing")
+    parser.add_argument("--slice", type=int, default=None,
+                        help="Slice size for testing small batches of transcripts")
     args = parser.parse_args()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
@@ -210,16 +212,21 @@ def main() -> None:
 
     tally_tags_feat_dict = {}
 
-    for i, transcript in enumerate(transcripts):
-        print(f"[{i+1}/{len(transcripts)}] Processing: {transcript.filename}")
+    for i, transcript in enumerate(transcripts[:args.slice]):
+        print(f"[{i+1}/{len(transcripts[:args.slice])}] Processing: {transcript.filename}")
 
-        # Select speaker lines based on argument
+        lines = []
         if args.speaker == "participant":
             lines = transcript.participant_lines
         else:
-            print("Getting interviewer lines...")
-            lines = transcript.interviewer_lines
-
+            for path in input_dir.parents:
+                if "diary" in path.name.lower():  # diaries do not have participant / interviewer labels
+                    lines = transcript.lines
+                    break
+                else:
+                    print("Could not find participant lines... exiting")
+                    exit(1)
+        
         if not lines:
             print(f"  No {args.speaker} lines found, skipping.")
             continue

@@ -105,8 +105,8 @@ def set_language(transcript: Transcript) -> None:
         else:
             print("Language not found.")
             print(f"language: {language}")
-            print(f"transcript: {transcript.filename}")
-            print(f"transcript: {transcript.site}")
+            print(f"Transcript: {transcript.filename}")
+            print(f"Site: {transcript.site}")
             print(f"languages in site: {langs}")
             transcript.language = Language.UNKNOWN
             print("Continuing...")
@@ -131,6 +131,10 @@ def structure_transcripts(
     for t in txt_files:
         transcript = Transcript(t)
         set_clinical_status(transcript, status_map)
+
+        print(transcript.filename)
+        print(len(transcript.lines))
+        
         set_language(transcript)
         
         lang_name = str(transcript.language)
