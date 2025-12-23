@@ -14,12 +14,14 @@ Refactored to use Transcript class abstraction.
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
+import csv
 import math
 import argparse
 import numpy as np
 import stanza
 from pathlib import Path
 from typing import Optional
+from collections import defaultdict
 
 from utils.transcripts import Transcript, ClinicalGroup
 from data.langs import Language
@@ -27,6 +29,40 @@ from data.langs import Language
 
 # Languages with Stanza support
 SUPPORTED_STANZA_LANGUAGES = {'zh', 'es', 'en', 'ko', 'it', 'ja', 'da', 'de', 'fr', 'yue'}
+
+# Mapping from Language enum to Stanza language code
+LANG_TO_STANZA = {
+    Language.zh: 'zh',
+    Language.es: 'es',
+    Language.en: 'en',
+    Language.ko: 'ko',
+    Language.it: 'it',
+    Language.ja: 'ja',
+    Language.da: 'da',
+    Language.de: 'de',
+    Language.fr: 'fr',
+    Language.yue: 'yue',
+    Language.cn: 'zh',  # Default for cn, but will be overridden by language detection
+}
+
+
+def save_failed_files_log(failed_files: list[dict], output_path: Path) -> None:
+    """Save failed files log to CSV."""
+    if not failed_files:
+        print("No failed files to log.")
+        return
+    
+    fieldnames = ['filename', 'filepath', 'language', 'reason', 'error_message']
+    
+    # Ensure parent directories exist
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(output_path, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(failed_files)
+    
+    print(f"Saved failed files log ({len(failed_files)} files) to {output_path}")
 
 
 def extract_feature(featstr: Optional[str], feat_type: str) -> str:
@@ -41,6 +77,30 @@ def extract_feature(featstr: Optional[str], feat_type: str) -> str:
                 else:
                     feature = f[len(feat_type)+1:] + '_mood'
     return feature
+
+
+def detect_language_for_transcript(transcript: Transcript, langid_pipeline) -> str:
+    """
+    Detect language for a transcript using Stanza's langid.
+    Returns a Stanza language code.
+    """
+    # Get sample text from transcript
+    sample_lines = transcript.participant_lines[:10] if transcript.participant_lines else transcript.lines[:10]
+    sample_text = ' '.join([line.text for line in sample_lines if line.text.strip()])
+    
+    if not sample_text.strip():
+        print(f"  No text found for language detection, defaulting to 'zh'")
+        return 'zh'
+    
+    doc = langid_pipeline(sample_text)
+    detected_lang = doc.lang
+    
+    # Map detected language to supported Stanza language
+    if detected_lang in SUPPORTED_STANZA_LANGUAGES:
+        return detected_lang
+    else:
+        print(f"  Detected language '{detected_lang}' not supported, defaulting to 'zh'")
+        return 'zh'
 
 
 def readin_word_freqs(inputfilename: str) -> dict[str, float]:
@@ -108,6 +168,13 @@ def save_tags(
         print("No data to save.")
         return
     
+    # Map speaker role to output format
+    speaker_role_map = {
+        'participant': 'Participant',
+        'interviewer': 'Interviewer'
+    }
+    speaker_role_output = speaker_role_map.get(speaker_role, speaker_role)
+    
     keys = list(tally_tags_feat_dict.keys())
     first_key = keys[0]
     
@@ -125,29 +192,57 @@ def save_tags(
             label = 'pronoun_possession'
         labels_renamed.append(label)
     
+    # Identify which labels are numeric features (for sum calculation)
+    # Exclude: num_sent, word_freq, file_name
+    non_feature_labels = {'num_sent', 'word_freq', 'file_name'}
+    
     header = [
-        'patient_id', 'language', 'clinical_group', 'transcript_type',
-        'day', 'session', 'speaker_role'
-    ] + labels_renamed
+        'network', 'language', 'src_subject_id', 'interview_type',
+        'day', 'interview_number', 'transcript_speaker_label', 'speaker_role'
+    ] + labels_renamed[:-3] + ['sum'] + ['num_sent', 'word_freq', 'file_name.txt']
+    
+    # Ensure parent directories exist
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     
     with open(output_file, 'w') as outfile:
         outfile.write('\t'.join(header) + '\n')
         
         for key, features in tally_tags_feat_dict.items():
-            # Parse key: patient_id_transcript_type_day_session
+            # Parse key: site_patient_id_language_transcript_type_day_session
             parts = key.split('_')
-            patient_id = parts[0]
-            language = parts[1]
-            clinical_group = parts[2]
+            site = parts[0]
+            patient_id = parts[1]
+            language_code = parts[2]
             transcript_type = parts[3]
             day = parts[4]
             session = parts[5]
             
-            row_values = [str(features[label]) for label in labels_original]
+            # Convert language code to full name
+            try:
+                language_name = Language[language_code].value
+            except KeyError:
+                language_name = language_code
+            
+            # Calculate sum of all feature counts (exclude num_sent, word_freq, file_name)
+            feature_sum = 0
+            for label in labels_original:
+                if label not in non_feature_labels:
+                    val = features[label]
+                    if isinstance(val, (int, float)) and not (isinstance(val, float) and np.isnan(val)):
+                        feature_sum += val
+            
+            # Build row values (excluding the last 3: num_sent, word_freq, file_name)
+            row_values = [str(features[label]) for label in labels_original[:-3]]
+            
+            # Get the trailing statistics
+            num_sent = str(features['num_sent'])
+            word_freq = str(features['word_freq'])
+            file_name = str(features['file_name'])
+            
             row = [
-                patient_id, language, clinical_group, transcript_type,
-                day, session, speaker_role
-            ] + row_values
+                site, language_name, patient_id, transcript_type,
+                day, session, '', speaker_role_output  # Empty string for transcript_speaker_label placeholder
+            ] + row_values + [str(feature_sum), num_sent, word_freq, file_name]
             
             outfile.write('\t'.join(row) + '\n')
     
@@ -163,13 +258,12 @@ def main() -> None:
                         help="Input directory containing transcript files")
     parser.add_argument("--o", type=str, required=True,
                         help="Output TSV file path")
+    parser.add_argument("--failed_log", type=str, required=False, default=None,
+                        help="Output CSV file path for failed files log (optional)")
     parser.add_argument("--feats", type=str, required=True,
                         help="Path to feature list file (tags_upos_xpos.txt)")
     parser.add_argument("--wordfreqs", type=str, required=False, default=None,
                         help="Path to word frequency file (optional)")
-    parser.add_argument("--language", type=str, required=True,
-                        choices=[lang.name for lang in Language if lang.name in SUPPORTED_STANZA_LANGUAGES],
-                        help="Language code for Stanza pipeline (filters transcripts to this language)")
     parser.add_argument("--speaker", type=str, default="participant",
                         choices=['participant', 'interviewer'],
                         help="Speaker role to analyze")
@@ -178,15 +272,18 @@ def main() -> None:
     parser.add_argument("--batch_size", type=int, default=400,
                         help="Batch size for Stanza dependency parsing")
     parser.add_argument("--slice", type=int, default=None,
-                        help="Slice size for testing small batches of transcripts")
+                        help="Slice size for testing small batches of transcripts (per language)")
     args = parser.parse_args()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
 
     input_dir = Path(args.i)
     output_file = Path(args.o)
+    failed_log_path = Path(args.failed_log) if args.failed_log else None
     feature_list_path = Path(args.feats)
-    target_language = Language[args.language]  # Convert string to Language enum
+
+    # Track failed files
+    failed_files: list[dict] = []
 
     # Load word frequencies if provided
     wordfreqs = {}
@@ -198,106 +295,205 @@ def main() -> None:
     tag_feat_dict = build_tag_feat_dict(feature_list_path)
     print(f"Loaded {len(tag_feat_dict)} feature tags")
 
-    # Initialize Stanza pipeline
-    nlp = stanza.Pipeline(args.language, depparse_batch_size=args.batch_size)
-    print(f"Initialized Stanza pipeline for language: {args.language}")
-
     # Set transcript directory and collect transcripts
     Transcript.set_directory_path(input_dir)
     all_transcripts = Transcript.list_transcripts()
+    print(f"Found {len(all_transcripts)} total transcripts")
+
+    # Group transcripts by language (Stanza code)
+    # For cn files, we'll handle them separately with language detection
+    transcripts_by_lang: dict[str, list] = defaultdict(list)
+    cn_transcripts: list = []
     
-    # Filter to target language
-    transcripts = [t for t in all_transcripts if t.language == target_language]
-    print(f"Found {len(transcripts)} transcripts matching language '{args.language}' (out of {len(all_transcripts)} total)")
+    for t in all_transcripts:
+        if t.language is None:
+            print(f"  Skipping transcript with unknown language: {t.filename}")
+            failed_files.append({
+                'filename': str(t.filename),
+                'filepath': str(t.full_path),
+                'language': 'UNKNOWN',
+                'reason': 'unknown_language',
+                'error_message': 'Transcript language could not be determined'
+            })
+            continue
+        if t.language == Language.cn:
+            cn_transcripts.append(t)
+        elif t.language.name in SUPPORTED_STANZA_LANGUAGES:
+            stanza_code = LANG_TO_STANZA.get(t.language)
+            if stanza_code:
+                transcripts_by_lang[stanza_code].append(t)
+        else:
+            print(f"  Skipping unsupported language {t.language.name}: {t.filename}")
+            failed_files.append({
+                'filename': str(t.filename),
+                'filepath': str(t.full_path),
+                'language': t.language.name,
+                'reason': 'unsupported_language',
+                'error_message': f"Language '{t.language.name}' is not supported by Stanza"
+            })
+
+    # Handle cn transcripts with language detection
+    if cn_transcripts:
+        print(f"\nDetecting languages for {len(cn_transcripts)} 'cn' transcripts...")
+        langid_pipeline = stanza.Pipeline(lang='multilingual', processors='langid', use_gpu=True)
+        
+        for t in cn_transcripts:
+            detected_lang = detect_language_for_transcript(t, langid_pipeline)
+            print(f"  {t.filename} -> detected '{detected_lang}'")
+            transcripts_by_lang[detected_lang].append(t)
+        
+        del langid_pipeline  # Free memory
+
+    # Print summary
+    print("\nTranscripts by language:")
+    for lang_code, trans_list in sorted(transcripts_by_lang.items()):
+        print(f"  {lang_code}: {len(trans_list)} transcripts")
 
     tally_tags_feat_dict = {}
 
-    for i, transcript in enumerate(transcripts[:args.slice]):
-        print(f"[{i+1}/{len(transcripts[:args.slice])}] Processing: {transcript.filename}")
-
-        lines = []
-        if args.speaker == "participant":
-            lines = transcript.participant_lines
-        else:
-            for path in input_dir.parents:
-                if "diary" in path.name.lower():  # diaries do not have participant / interviewer labels
-                    lines = transcript.lines
-                    break
-                else:
-                    print("Could not find participant lines... exiting")
-                    exit(1)
+    # Process each language group
+    for lang_code in sorted(transcripts_by_lang.keys()):
+        transcripts = transcripts_by_lang[lang_code]
+        if args.slice:
+            transcripts = transcripts[:args.slice]
         
-        if not lines:
-            print(f"  No {args.speaker} lines found, skipping.")
-            continue
+        print(f"\n{'='*60}")
+        print(f"Processing {len(transcripts)} transcripts for language: {lang_code}")
+        print(f"{'='*60}")
+        
+        # Initialize Stanza pipeline for this language
+        nlp = stanza.Pipeline(lang_code, depparse_batch_size=args.batch_size, use_gpu=True)
+        
+        for i, transcript in enumerate(transcripts):
+            print(f"[{i+1}/{len(transcripts)}] Processing: {transcript.filename}")
 
-        tags = []
-        num_words = 0
-        num_sentences = 0
-        word_freq_list = []
+            try:
+                lines = []
+                # Check if this is a diary (no participant/interviewer labels)
+                is_diary = False
+                for part in transcript.filename.parts:
+                    if "diary" in part.lower():
+                        is_diary = True
+                        break
+                
+                if is_diary:
+                    lines = transcript.lines
+                elif args.speaker == "participant":
+                    lines = transcript.participant_lines
+                else:
+                    # lines = transcript.interviewer_lines if hasattr(transcript, 'interviewer_lines') else []
+                    print("Interviewer lines not yet tested - exiting")
+                    exit(1)
+                
+                if not lines:
+                    print(f"  No {args.speaker} lines found, skipping.")
+                    failed_files.append({
+                        'filename': str(transcript.filename),
+                        'filepath': str(transcript.full_path),
+                        'language': lang_code,
+                        'reason': 'no_lines',
+                        'error_message': f"No {args.speaker} lines found"
+                    })
+                    continue
 
-        # Process each line
-        for transcript_line in lines:
-            sentence_text = transcript_line.text
-            if not sentence_text.strip():
-                continue
+                tags = []
+                num_words = 0
+                num_sentences = 0
+                word_freq_list = []
 
-            doc = nlp(sentence_text)
-            for sent in doc.sentences:  # type: ignore
-                num_sentences += 1
-                for word in sent.words:
-                    case = extract_feature(word.feats, 'Case')
-                    number = extract_feature(word.feats, 'Number')
-                    person = extract_feature(word.feats, 'Person')
-                    gender = extract_feature(word.feats, 'Gender')
-                    prontype = extract_feature(word.feats, 'PronType')
-                    definite = extract_feature(word.feats, 'Definite')
-                    mood = extract_feature(word.feats, 'Mood')
-                    tense = extract_feature(word.feats, 'Tense')
-                    verbform = extract_feature(word.feats, 'VerbForm')
-                    poss = extract_feature(word.feats, 'Poss')
-                    ntype = extract_feature(word.feats, 'NumType')
+                # Process each line
+                for transcript_line in lines:
+                    sentence_text = transcript_line.text
+                    if not sentence_text.strip():
+                        continue
 
-                    tags.append([
-                        word.lemma, word.upos, word.xpos, word.deprel,
-                        case, number, person, gender, prontype, definite,
-                        mood, tense, verbform, poss, ntype
-                    ])
+                    doc = nlp(sentence_text)
+                    for sent in doc.sentences:  # type: ignore
+                        num_sentences += 1
+                        for word in sent.words:
+                            case = extract_feature(word.feats, 'Case')
+                            number = extract_feature(word.feats, 'Number')
+                            person = extract_feature(word.feats, 'Person')
+                            gender = extract_feature(word.feats, 'Gender')
+                            prontype = extract_feature(word.feats, 'PronType')
+                            definite = extract_feature(word.feats, 'Definite')
+                            mood = extract_feature(word.feats, 'Mood')
+                            tense = extract_feature(word.feats, 'Tense')
+                            verbform = extract_feature(word.feats, 'VerbForm')
+                            poss = extract_feature(word.feats, 'Poss')
+                            ntype = extract_feature(word.feats, 'NumType')
 
-                    word_freq_list = determine_freqs(word, wordfreqs, word_freq_list)
-                    num_words += 1
+                            tags.append([
+                                word.lemma, word.upos, word.xpos, word.deprel,
+                                case, number, person, gender, prontype, definite,
+                                mood, tense, verbform, poss, ntype
+                            ])
 
-        # Calculate mean word frequency
-        if word_freq_list:
-            mean_word_freq = np.array(word_freq_list).mean()
-        else:
-            mean_word_freq = np.nan
+                            word_freq_list = determine_freqs(word, wordfreqs, word_freq_list)
+                            num_words += 1
 
-        # Build unique key for this transcript
-        key = '_'.join([
-            transcript.patient_id or 'UNKNOWN',
-            transcript.language.name if transcript.language else 'UNKNOWN',
-            transcript.group_status.value if transcript.group_status else 'UNKNOWN',
-            transcript.transcript_type or 'UNKNOWN',
-            transcript.day or 'UNKNOWN',
-            transcript.session or 'UNKNOWN'
-        ])
+                # Check if processing returned nothing
+                if num_words == 0 or num_sentences == 0:
+                    print(f"  No words/sentences extracted, skipping.")
+                    failed_files.append({
+                        'filename': str(transcript.filename),
+                        'filepath': str(transcript.full_path),
+                        'language': lang_code,
+                        'reason': 'empty_output',
+                        'error_message': f"Extracted 0 sentences and 0 words"
+                    })
+                    continue
 
-        freq_statistics = {
-            'num_sent': num_sentences,
-            'num_words': num_words,
-            'word_freq': mean_word_freq,
-            'file_name': str(transcript.filename)
-        }
+                # Calculate mean word frequency
+                if word_freq_list:
+                    mean_word_freq = np.array(word_freq_list).mean()
+                else:
+                    mean_word_freq = np.nan
 
-        tally_tags_feat_dict[key] = fill_tag_feat_slots(
-            tag_feat_dict, tags, freq_statistics
-        )
+                # Build unique key for this transcript
+                key = '_'.join([
+                    transcript.site or 'UNKNOWN',
+                    transcript.patient_id or 'UNKNOWN',
+                    transcript.language.name if transcript.language else 'UNKNOWN',
+                    transcript.transcript_type or 'UNKNOWN',
+                    transcript.day or 'UNKNOWN',
+                    transcript.session or 'UNKNOWN'
+                ])
 
-        print(f"  Processed {num_sentences} sentences, {num_words} words")
+                freq_statistics = {
+                    'num_sent': num_sentences,
+                    # 'num_words': num_words,  # Not included in expected output
+                    'word_freq': mean_word_freq,
+                    'file_name': str(transcript.filename)
+                }
+
+                tally_tags_feat_dict[key] = fill_tag_feat_slots(
+                    tag_feat_dict, tags, freq_statistics
+                )
+
+                print(f"  Processed {num_sentences} sentences, {num_words} words")
+
+            except Exception as e:
+                print(f"  ERROR: {str(e)}")
+                failed_files.append({
+                    'filename': str(transcript.filename),
+                    'filepath': str(transcript.full_path),
+                    'language': lang_code,
+                    'reason': 'processing_error',
+                    'error_message': str(e)
+                })
+        
+        # Free memory before loading next language pipeline
+        del nlp
 
     # Save results
     save_tags(tally_tags_feat_dict, args.speaker, output_file)
+
+    # Save failed files log
+    if failed_log_path:
+        save_failed_files_log(failed_files, failed_log_path)
+    elif failed_files:
+        print(f"\nWarning: {len(failed_files)} files failed but no --failed_log path specified.")
 
 
 if __name__ == "__main__":
