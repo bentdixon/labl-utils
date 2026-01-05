@@ -25,7 +25,7 @@ def create_frequency_file(data: pl.DataFrame, outpath: Path) -> None:
 
 def calculate_frequencies_anc(filepath: Path) -> pl.DataFrame:
     """
-    Calculate word frequencies from a corpus file.
+    Calculate word frequencies from the ANC corpus of written frequencies.
     
     Expects tab-separated file with columns: word, lemma, pos, count
     Returns DataFrame with added 'frequency' column (count / total).
@@ -45,7 +45,7 @@ def calculate_frequencies_anc(filepath: Path) -> pl.DataFrame:
 
 def calculate_frequencies_subtlex(filepath: Path, output_path: Optional[Path] = None) -> pl.DataFrame:
     """
-    Calculate word frequencies from a SUBTLEX-style corpus file.
+    Calculate word frequencies from SUBTLEX-style corpus files.
     
     Expects comma-separated file with headers including:
         Word, FREQcount, CDcount, FREQlow, Cdlow, SUBTLWF, Lg10WF, SUBTLCD, Lg10CD
@@ -125,19 +125,29 @@ def load_frequency_dict(filepath: Path, use_log: bool = True) -> dict[str, float
     return build_frequency_dict(freq_df, use_log=use_log)
 
 
-def extract_words_from_transcript(transcript: Transcript) -> list[str]:
+def extract_words_from_transcript(
+    transcript: Transcript,
+    speaker_role: str = "PARTICIPANT",
+) -> list[str]:
     """
-    Extract all participant words from a transcript.
+    Extract words from a transcript for a specific speaker role.
+    Falls back to all lines if no matching lines exist (e.g., diaries).
     
     Args:
         transcript: Transcript object
+        speaker_role: "PARTICIPANT" or "INTERVIEWER"
         
     Returns:
-        List of lowercase words from participant lines
+        List of lowercase words from specified speaker's lines
     """
     words = []
     
-    for line in transcript.participant_lines:
+    if speaker_role == "INTERVIEWER":
+        lines = transcript.interviewer_lines if transcript.interviewer_lines else transcript.lines
+    else:
+        lines = transcript.participant_lines if transcript.participant_lines else transcript.lines
+    
+    for line in lines:
         text = line.text
         # Remove punctuation and split on whitespace
         cleaned = re.sub(r'[^\w\s]', '', text.lower())
@@ -146,18 +156,22 @@ def extract_words_from_transcript(transcript: Transcript) -> list[str]:
     return words
 
 
-def extract_words_from_file(filepath: Path) -> list[str]:
+def extract_words_from_file(
+    filepath: Path,
+    speaker_role: str = "PARTICIPANT",
+) -> list[str]:
     """
-    Extract all participant words from a transcript file.
+    Extract words from a transcript file for a specific speaker role.
     
     Args:
         filepath: Path to transcript file
+        speaker_role: "PARTICIPANT" or "INTERVIEWER"
         
     Returns:
-        List of lowercase words from participant lines
+        List of lowercase words from specified speaker's lines
     """
     transcript = Transcript(filepath)
-    return extract_words_from_transcript(transcript)
+    return extract_words_from_transcript(transcript, speaker_role)
 
 
 def calculate_mean_log_frequency(
@@ -196,6 +210,7 @@ def calculate_mean_log_frequency(
 def get_transcript_word_frequency(
     filepath: Path,
     freq_dict: dict[str, float],
+    speaker_role: str = "PARTICIPANT",
 ) -> tuple[float | None, int, int]:
     """
     Calculate mean word frequency for a transcript file.
@@ -203,29 +218,25 @@ def get_transcript_word_frequency(
     Args:
         filepath: Path to transcript file
         freq_dict: Dictionary mapping word -> log frequency
+        speaker_role: "PARTICIPANT" or "INTERVIEWER"
         
     Returns:
         Tuple of (mean_log_frequency, words_found, words_missing)
     """
-    words = extract_words_from_file(filepath)
+    words = extract_words_from_file(filepath, speaker_role)
     return calculate_mean_log_frequency(words, freq_dict)
 
 
 if __name__ == "__main__":
     # Example usage with SUBTLEX-US file
-    input_file = Path("/data/data/wolfflab/Dixon/labl_utils/data/corpori/SUBTLEXusExcel2007.csv")
-    output_file = Path("/data/data/wolfflab/Dixon/labl_utils/data/frequency_csvs/SUBTLEX-US-frequencies.csv")
+    input_file = Path("/data/path/corpus.csv")
+    output_file = Path("/data/path/output.csv")
     
-    data = calculate_frequencies_subtlex(
-        filepath=input_file,
-        output_path=output_file
-    )
+    data = calculate_frequencies_subtlex(filepath=input_file, output_path=output_file)
     print(data.head(10))
     
-    # Build lookup dictionary
     freq_dict = build_frequency_dict(data, use_log=True)
-    print(f"\nLoaded {len(freq_dict):,} words into frequency dictionary")
-    
-    # Example lookup
+
+    # Example    
     if "you" in freq_dict:
         print(f"Log frequency of 'you': {freq_dict['you']:.6f}")
