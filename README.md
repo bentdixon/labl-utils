@@ -17,7 +17,7 @@ Example usages of scripts and functions in the `utils/` subfolder.
 Implements `Transcript` object - see Python file for complete list of parameters and methods. Allows for easy iteration through directories, easy text parsing, and automatic assignment of site location, clinical status (when available), and patient ID.
 
 ``` python
-from utils.transcript_utils import Transcript, ClinicalGroup
+from utils.transcripts import Transcript
 
 # Set the transcript directory first, containing CHR and HC subdirectories. Recommended, not enforced. 
 # Allows for `list_transcripts()` class method to be used and more robust path-handling of transcripts.  
