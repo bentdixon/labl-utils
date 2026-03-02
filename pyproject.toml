@@ -13,7 +13,6 @@ authors = [
 ]
 
 dependencies = [
-    "vllm",
     "polars",
     "stanza",
     "rich",
@@ -21,12 +20,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest",
-    "black",
-    "flake8",
-]
+cli = ["vllm"]
+dev = ["pytest", "black", "flake8"]
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["cli*", "utils*", "data*", "examples*"]
+where = ["src"]
+include = ["labl*"]
