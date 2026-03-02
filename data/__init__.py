@@ -1,1 +1,0 @@
-"""Data files and constants for labl-utils."""
