@@ -19,7 +19,7 @@ import re
 import csv
 import argparse
 from pathlib import Path
-from utils.transcripts import Transcript
+from labl.transcripts import Transcript
 from vllm import LLM, SamplingParams
 
 

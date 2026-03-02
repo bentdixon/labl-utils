@@ -39,9 +39,9 @@ import shutil
 from rich.console import Console
 from rich.tree import Tree
 from rich.prompt import Confirm
-from utils.transcripts import ClinicalGroup, Transcript
-from utils.determine_language import determine_language
-from data.langs import Language, SITE_CODE_TO_LANGUAGES
+from labl.transcripts import ClinicalGroup, Transcript
+from labl.features.determine_language import determine_language
+from labl.data.langs import Language, SITE_CODE_TO_LANGUAGES
 
 console = Console()
 

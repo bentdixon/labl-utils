@@ -12,7 +12,7 @@ from pathlib import Path
 from functools import cached_property
 from typing import Optional
 
-from data.langs import Language
+from labl.data.langs import Language
 
 
 class FrequencyLookup:
@@ -152,7 +152,7 @@ class FrequencyLookup:
 
 def main() -> None:
     """Example usage of FrequencyLookup class."""
-    from utils.transcripts import Transcript
+    from labl.transcripts import Transcript
 
     # Initialize frequency lookup with SUBTLEX-US
     freq = FrequencyLookup("data/frequency_corpus/SUBTLEX-US.csv")

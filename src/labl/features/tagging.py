@@ -23,8 +23,8 @@ from pathlib import Path
 from typing import Optional
 from collections import defaultdict
 
-from utils.transcripts import Transcript, ClinicalGroup
-from data.langs import Language
+from labl.transcripts import Transcript, ClinicalGroup
+from labl.data.langs import Language
 
 
 # Languages with Stanza support

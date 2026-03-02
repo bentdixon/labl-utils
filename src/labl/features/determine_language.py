@@ -1,8 +1,8 @@
 from typing import cast
 from stanza.models.common.doc import Document
 from stanza.pipeline.core import Pipeline
-from utils.transcripts import Transcript
-from data.langs import Language
+from labl.transcripts import Transcript
+from labl.data.langs import Language
 
 nlp = Pipeline(lang="multilingual", processors="langid", use_gpu=True)
 

@@ -25,7 +25,7 @@ import numpy as np
 import polars as pl
 from nltk.corpus import wordnet as wn
 from typing import Optional, Tuple
-from utils.utils.transcript_utils import Transcript, ClinicalGroup
+from labl.transcripts import Transcript, ClinicalGroup
 from functools import lru_cache
 
 

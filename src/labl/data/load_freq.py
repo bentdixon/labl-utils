@@ -12,8 +12,8 @@ import polars as pl
 from pathlib import Path
 from typing import Optional
 
-from utils.transcripts import Transcript, ClinicalGroup
-from data.langs import Language
+from labl.transcripts import Transcript, ClinicalGroup
+from labl.data.langs import Language
 
 
 def create_frequency_file(data: pl.DataFrame, outpath: Path) -> None:
