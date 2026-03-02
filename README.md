@@ -16,12 +16,16 @@ pip install git+https://github.com/bentdixon/labl-utils.git
 
 Example usages of scripts and functions in the `utils/` subfolder.
 
-### `transcripts.py`
+### `transcripts.py`, `frequency.py`, `specificity.py`
 
-Implements `Transcript` object - see Python file for complete list of parameters and methods. Allows for easy iteration through directories, easy text parsing, and automatic assignment of site location, clinical status (when available), and patient ID.
+`transcipts.py` implements `Transcript` object - see Python file for complete list of parameters and methods. Allows for easy iteration through directories, easy text parsing, and automatic assignment of site location, clinical status (when available), and patient ID.  
+`specificity.py` and `frequency.py` respectively implement `SpecificityLookup` and `FrequencyLookup` to gain additional word-level information.
+
 
 ``` python
 from utils.transcripts import Transcript
+from utils.specificity import SpecificityLookup
+from utils.frequency import FrequencyLookup
 
 # Set the transcript directory first, containing CHR and HC subdirectories. Recommended, not enforced. 
 # Allows for `list_transcripts()` class method to be used and more robust path-handling of transcripts.  
@@ -43,9 +47,17 @@ print(len(t1.lines))             # Total line count
 print(len(t1.participant_lines)) # Participant utterances only
 print(len(t1.interviewer_lines)) # Interviewer utterances only
 
+# Initialize specificity and frequency lookup for nouns
+spec = SpecificityLookup(pos='n', normalized=False)
+freq = FrequencyLookup("data/frequency_corpus/SUBTLEX-US.csv")
+
 # Iterate over lines
 for line in t1.participant_lines:
+    # Display all participant lines
     print(f"{line.line_number}: {line.timestamp} - {line.text}")
+    # Get the frequency and specificity of the first word
+    start_word = line.text.split(" ")[0]
+    print(f"{starting_word}: spec - {spec.lookup(start_word)}, freq - {freq.lookup(start_word, use_log=True)}") 
 ```
 
 ## Using `features/`
