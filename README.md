@@ -16,7 +16,7 @@ pip install git+https://github.com/bentdixon/labl-utils.git
 
 Example usages of scripts and functions in the `utils/` subfolder.
 
-### `transcript_utils.py`
+### `transcripts.py`
 
 Implements `Transcript` object - see Python file for complete list of parameters and methods. Allows for easy iteration through directories, easy text parsing, and automatic assignment of site location, clinical status (when available), and patient ID.
 
@@ -47,6 +47,8 @@ print(len(t1.interviewer_lines)) # Interviewer utterances only
 for line in t1.participant_lines:
     print(f"{line.line_number}: {line.timestamp} - {line.text}")
 ```
+
+## Using `features/`
 
 ### `combine_data.py`
 
