@@ -10,7 +10,6 @@ nlp = Pipeline(lang="multilingual", processors="langid", use_gpu=True)
 def determine_language(transcript: Transcript) -> Language:
     if len(transcript.lines) > 450:  # prevents strange cuDNN error
         text = "\n".join(line.text for line in transcript.lines[:450])
-        print("Reducing text size...")
     else:
         text = "\n".join(line.text for line in transcript.lines)
 

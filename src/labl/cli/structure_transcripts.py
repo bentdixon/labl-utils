@@ -37,6 +37,7 @@ from pathlib import Path
 import argparse
 import shutil
 from rich.console import Console
+from rich.progress import track
 from rich.tree import Tree
 from rich.prompt import Confirm
 from labl.transcripts import ClinicalGroup, Transcript
@@ -132,11 +133,11 @@ def structure_transcripts(
 
     output_struct: dict[str, dict[str, dict[str, list[Transcript]]]] = {}
 
-    for t in txt_files:
+    for t in track(txt_files, description="Processing transcripts..."):
         transcript = Transcript(t)
         set_clinical_status(transcript, status_map)
         set_language(transcript)
-        
+
         lang_name = str(transcript.language)
         group_name = str(transcript.group_status)
 
