@@ -37,7 +37,7 @@ from pathlib import Path
 import argparse
 import shutil
 from rich.console import Console
-from rich.progress import track
+from rich.progress import Progress, BarColumn, TaskProgressColumn, TimeRemainingColumn, TextColumn
 from rich.tree import Tree
 from rich.prompt import Confirm
 from labl.transcripts import ClinicalGroup, Transcript
@@ -108,13 +108,13 @@ def set_language(transcript: Transcript) -> None:
         if language in langs: 
             transcript.language = language
         else:
-            print("Language not found.")
-            print(f"language: {language}")
-            print(f"Transcript: {transcript.filename}")
-            print(f"Site: {transcript.site}")
-            print(f"languages in site: {langs}")
+            console.print(f"[yellow]Warning:[/yellow] Language not found.")
+            console.print(f"[yellow]  language:[/yellow] {language}")
+            console.print(f"[yellow]  transcript:[/yellow] {transcript.filename}")
+            console.print(f"[yellow]  site:[/yellow] {transcript.site}")
+            console.print(f"[yellow]  languages in site:[/yellow] {langs}")
             transcript.language = Language.UNKNOWN
-            print("Continuing...")
+            console.print(f"[yellow]  Continuing...[/yellow]")
 
 
 def structure_transcripts(
@@ -133,22 +133,33 @@ def structure_transcripts(
 
     output_struct: dict[str, dict[str, dict[str, list[Transcript]]]] = {}
 
-    for t in track(txt_files, description="Processing transcripts..."):
-        transcript = Transcript(t)
-        set_clinical_status(transcript, status_map)
-        set_language(transcript)
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+        redirect_stdout=True,
+        redirect_stderr=False,
+        console=console,
+    ) as progress:
+        task = progress.add_task("Processing transcripts...", total=len(txt_files))
+        for t in txt_files:
+            transcript = Transcript(t)
+            set_clinical_status(transcript, status_map)
+            set_language(transcript)
 
-        lang_name = str(transcript.language)
-        group_name = str(transcript.group_status)
+            lang_name = str(transcript.language)
+            group_name = str(transcript.group_status)
 
-        if text_type not in output_struct:
-            output_struct[text_type] = {}
-        if lang_name not in output_struct[text_type]:
-            output_struct[text_type][lang_name] = {}
-        if group_name not in output_struct[text_type][lang_name]:
-            output_struct[text_type][lang_name][group_name] = []
+            if text_type not in output_struct:
+                output_struct[text_type] = {}
+            if lang_name not in output_struct[text_type]:
+                output_struct[text_type][lang_name] = {}
+            if group_name not in output_struct[text_type][lang_name]:
+                output_struct[text_type][lang_name][group_name] = []
 
-        output_struct[text_type][lang_name][group_name].append(transcript)
+            output_struct[text_type][lang_name][group_name].append(transcript)
+            progress.advance(task)
 
     return output_struct
 
