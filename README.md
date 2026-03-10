@@ -7,9 +7,13 @@ cd labl-utils
 # Make new virtual environment (Conda or Venv, etc.), or use pre-existing environment. If using pre-existing, use --no-deps. If creating new, use default.
 pip install -e .  # OR, pip install -e . --no-deps
 ```
-Alternatively:
+To install via `pip`:
 ``` bash
 pip install git+https://github.com/bentdixon/labl-utils.git
+```
+To utilize the CLI scripts which require the vLLM dependency:
+```bash
+pip install "labl-utils[cli] @ git+https://github.com/bentdixon/labl-utils.git" 
 ```
 
 ## Core Modules
