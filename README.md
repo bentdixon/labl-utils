@@ -187,27 +187,29 @@ combined_data = combine_csvs(c1, c2)
 
 ## Using `cli/`
 
-### `assign_roles.py`
+CLI scripts are available as console commands after installing the package (`pip install -e .`). The `vllm` dependency required by the LLM scripts is optional and can be installed with `pip install -e ".[cli]"`.
+
+### `labl-assign-roles`
 
 Classifies PARTICIPANT and INTERVIEWER speaker tags using vLLM batch inference.
 
 ``` bash
-python cli/assign_roles.py --i "input/transcripts/" --o "output/" --thinking "medium" --gpu 0 --tp 1 --batch-size 32
+labl-assign-roles --i "input/transcripts/" --o "output/" --thinking "medium" --gpu 0 --tp 1 --batch-size 32
 ```
 
-### `assign_interview_type.py`
+### `labl-assign-interview-type`
 
 Classifies interview type as OPEN or PSYCHS using vLLM batch inference.
 
 ``` bash
-python cli/assign_interview_type.py --i "input/transcripts/" --o "output/" --thinking "medium" --gpu 0 --tp 1 --batch-size 32
+labl-assign-interview-type --i "input/transcripts/" --o "output/" --thinking "medium" --gpu 0 --tp 1 --batch-size 32
 ```
 
-### `structure_transcripts.py`
+### `labl-structure`
 
 Organizes transcripts by language and clinical status. Optionally uses CSV for clinical status mapping.
 
 ``` bash
-python cli/structure_transcripts.py --i "input/transcripts/" --o "output/" --text-type "open" --gpu 0
-python cli/structure_transcripts.py --i "input/" --o "output/" --text-type "psychs" --csv "status.csv" --gpu 0
+labl-structure --i "input/transcripts/" --o "output/" --text-type "open" --gpu 0
+labl-structure --i "input/" --o "output/" --text-type "psychs" --csv "status.csv" --gpu 0
 ```

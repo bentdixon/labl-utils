@@ -23,6 +23,11 @@ dependencies = [
 cli = ["vllm"]
 dev = ["pytest", "black", "flake8"]
 
+[project.scripts]
+labl-structure = "labl.cli.structure_transcripts:main"
+labl-assign-roles = "labl.cli.assign_roles:main"
+labl-assign-interview-type = "labl.cli.assign_interview_type:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["labl*"]
