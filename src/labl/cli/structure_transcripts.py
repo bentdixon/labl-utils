@@ -46,26 +46,30 @@ from labl.data.langs import Language, SITE_CODE_TO_LANGUAGES
 console = Console()
 
 
-def load_clinical_status_csv(csv_path: Path) -> dict[str, ClinicalGroup]:
-    """Load CSV and return mapping of patient_id to ClinicalGroup."""
+def load_clinical_status_csv(csv_paths: list[Path]) -> dict[str, ClinicalGroup]:
+    """Load one or more CSVs and return a merged mapping of patient_id to ClinicalGroup.
+
+    When the same patient_id appears in multiple files, the last file wins.
+    """
     status_map: dict[str, ClinicalGroup] = {}
 
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
+    for csv_path in csv_paths:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
 
-        if 'patient_id' not in reader.fieldnames or 'clinical_status' not in reader.fieldnames:
-            raise ValueError("CSV must contain 'patient_id' and 'clinical_status' columns")
+            if 'patient_id' not in reader.fieldnames or 'clinical_status' not in reader.fieldnames:
+                raise ValueError(f"{csv_path}: CSV must contain 'patient_id' and 'clinical_status' columns")
 
-        for row in reader:
-            patient_id = row['patient_id'].strip()
-            status_str = row['clinical_status'].strip().upper()
+            for row in reader:
+                patient_id = row['patient_id'].strip()
+                status_str = row['clinical_status'].strip().upper()
 
-            if status_str == 'CHR':
-                status_map[patient_id] = ClinicalGroup.CHR
-            elif status_str == 'HC':
-                status_map[patient_id] = ClinicalGroup.HC
-            else:
-                status_map[patient_id] = ClinicalGroup.UNKNOWN
+                if status_str == 'CHR':
+                    status_map[patient_id] = ClinicalGroup.CHR
+                elif status_str == 'HC':
+                    status_map[patient_id] = ClinicalGroup.HC
+                else:
+                    status_map[patient_id] = ClinicalGroup.UNKNOWN
 
     return status_map
 
@@ -114,7 +118,7 @@ def set_language(transcript: Transcript) -> None:
 
 def structure_transcripts(
     dirpath: Path,
-    csv_path: Path | None,
+    csv_paths: list[Path] | None,
     text_type: str
 ) -> dict[str, dict[str, dict[str, list[Transcript]]]]:
     """
@@ -123,18 +127,14 @@ def structure_transcripts(
     txt_files = list(dirpath.rglob('*.txt'))
 
     status_map: dict[str, ClinicalGroup] | None = None
-    if csv_path is not None:
-        status_map = load_clinical_status_csv(csv_path)
+    if csv_paths:
+        status_map = load_clinical_status_csv(csv_paths)
 
     output_struct: dict[str, dict[str, dict[str, list[Transcript]]]] = {}
 
     for t in txt_files:
         transcript = Transcript(t)
         set_clinical_status(transcript, status_map)
-
-        print(transcript.filename)
-        print(len(transcript.lines))
-        
         set_language(transcript)
         
         lang_name = str(transcript.language)
@@ -228,7 +228,8 @@ def main() -> None:
     parser.add_argument("--i", type=str, required=True, help="Input directory")
     parser.add_argument("--o", type=str, required=False, default=None,
                         help="Output directory (default: reorganize in-place within input directory)")
-    parser.add_argument("--csv", type=str, required=False, help="CSV with patient_id and clinical_status columns")
+    parser.add_argument("--csv", type=str, required=False, nargs='+',
+                        help="One or more CSVs with patient_id and clinical_status columns")
     parser.add_argument("--text-type", type=str, required=True, help="Transcript text type")
     parser.add_argument("--gpu", type=int, required=True)
     args = parser.parse_args()
@@ -241,16 +242,19 @@ def main() -> None:
     else:
         output_path = Path(args.o)
 
-    csv_path = None
+    csv_paths = None
     if args.csv is not None:
-        csv_path = Path(args.csv)
-        if not csv_path.exists():
-            console.print(f"[bold red]Error:[/bold red] CSV path {csv_path} does not exist.")
-            return
+        csv_paths = []
+        for p in args.csv:
+            csv_path = Path(p)
+            if not csv_path.exists():
+                console.print(f"[bold red]Error:[/bold red] CSV path {csv_path} does not exist.")
+                return
+            csv_paths.append(csv_path)
 
     output_struct = structure_transcripts(
         dirpath=input_path,
-        csv_path=csv_path,
+        csv_paths=csv_paths,
         text_type=args.text_type
     )
 
