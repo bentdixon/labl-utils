@@ -207,7 +207,6 @@ def transfer_files(
         move: If True, move files; if False, copy files
     """
     operation = shutil.move if move else shutil.copy2
-    op_name = "moved" if move else "copied"
 
     for text_type, languages in output_struct.items():
         for lang_name, groups in languages.items():
@@ -228,8 +227,6 @@ def transfer_files(
                             counter += 1
 
                     operation(src, dst)
-
-    console.print(f"\n[bold green]Files {op_name} to {outpath}[/bold green]")
 
 
 def main() -> None:

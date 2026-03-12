@@ -19,8 +19,11 @@ import re
 import csv
 import argparse
 from pathlib import Path
+from rich.console import Console
 from rich.progress import track
 from labl.transcripts import Transcript
+
+console = Console()
 from vllm import LLM, SamplingParams
 
 
@@ -40,8 +43,6 @@ def load_model(
     Returns:
         vLLM LLM instance
     """
-    print(f"Loading LLM model: {model_name}...")
-    
     llm = LLM(
         model=model_name,
         tensor_parallel_size=tensor_parallel_size,
@@ -51,7 +52,6 @@ def load_model(
         trust_remote_code=True,
     )
     
-    print(f"Model {model_name} loaded successfully")
     return llm
 
 
@@ -148,13 +148,12 @@ def classify_interview_type(
     )
     
     response = outputs[0].outputs[0].text.strip()
-    print(f"\n{transcript.filename} --->\n{response}\n")
-    
+
     interview_type = parse_interview_type(response)
-    
+
     if interview_type is None:
-        print(
-            f"Failed to parse interview type in {transcript.patient_id} at "
+        console.print(
+            f"[yellow]Warning:[/yellow] Failed to parse interview type in {transcript.patient_id} at "
             f"{transcript.filename}: no valid type found in response"
         )
     
@@ -197,13 +196,12 @@ def classify_batch(
     results = []
     for transcript, output in zip(transcripts, outputs):
         response = output.outputs[0].text.strip()
-        print(f"\n{transcript.filename} --->\n{response}\n")
-        
+
         interview_type = parse_interview_type(response)
-        
+
         if interview_type is None:
-            print(
-                f"Failed to parse interview type in {transcript.patient_id} at "
+            console.print(
+                f"[yellow]Warning:[/yellow] Failed to parse interview type in {transcript.patient_id} at "
                 f"{transcript.filename}: no valid type found in response"
             )
         
@@ -263,8 +261,6 @@ def main() -> None:
 
     def process_result(transcript: Transcript, interview_type: str | None) -> None:
         """Process a single classification result."""
-        print(f"{interview_type} found for {transcript.full_path}")
-
         if interview_type is None:
             failed.append((str(transcript.filename), "Failed to parse interview type"))
         elif interview_type == "OPEN":
@@ -310,15 +306,12 @@ def main() -> None:
         writer = csv.DictWriter(f, fieldnames=["patient_id", "filename"])
         writer.writeheader()
         writer.writerows(open_transcripts)
-    print(f"Wrote {len(open_transcripts)} OPEN interviews to {open_csv_path}")
-
     # Write PSYCHS CSV
     psychs_csv_path = output_dir / "psychs_interviews.csv"
     with open(psychs_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["patient_id", "filename"])
         writer.writeheader()
         writer.writerows(psychs_transcripts)
-    print(f"Wrote {len(psychs_transcripts)} PSYCHS interviews to {psychs_csv_path}")
 
     # Report failures
     if failed:
@@ -327,7 +320,6 @@ def main() -> None:
             writer = csv.DictWriter(f, fieldnames=["filename", "error"])
             writer.writeheader()
             writer.writerows([{"filename": fn, "error": err} for fn, err in failed])
-        print(f"Wrote {len(failed)} failed transcripts to {failed_csv_path}")
 
 
 if __name__ == "__main__":

@@ -18,8 +18,11 @@ import re
 import csv
 import argparse
 from pathlib import Path
+from rich.console import Console
 from rich.progress import track
 from labl.transcripts import Transcript
+
+console = Console()
 from vllm import LLM, SamplingParams
 
 
@@ -99,8 +102,6 @@ def load_model(
     Returns:
         vLLM LLM instance
     """
-    print(f"Loading LLM model: {model_name}...")
-    
     llm = LLM(
         model=model_name,
         tensor_parallel_size=tensor_parallel_size,
@@ -110,7 +111,6 @@ def load_model(
         trust_remote_code=True,
     )
     
-    print(f"Model {model_name} loaded successfully")
     return llm
 
 
@@ -238,14 +238,13 @@ def classify_speaker_roles(
     )
 
     response = outputs[0].outputs[0].text.strip()
-    print(f"\n{transcript.filename} --->\n{response}\n")
 
     roles = parse_roles(response)
 
     if roles is None:
-        print(
-            f"Failed to parse roles in {transcript.patient_id} at "
-            f"{transcript.filename} due to failed validation"
+        console.print(
+            f"[yellow]Warning:[/yellow] Failed to parse roles in {transcript.patient_id} at "
+            f"{transcript.filename}"
         )
         return None, None
 
@@ -303,14 +302,13 @@ def classify_batch(
     results = []
     for transcript, output, label_mapping in zip(transcripts, outputs, all_mappings):
         response = output.outputs[0].text.strip()
-        print(f"\n{transcript.filename} --->\n{response}\n")
 
         roles = parse_roles(response)
 
         if roles is None:
-            print(
-                f"Failed to parse roles in {transcript.patient_id} at "
-                f"{transcript.filename} due to failed validation"
+            console.print(
+                f"[yellow]Warning:[/yellow] Failed to parse roles in {transcript.patient_id} at "
+                f"{transcript.filename}"
             )
 
         results.append((transcript, roles, label_mapping))
@@ -413,9 +411,6 @@ def main() -> None:
     transcripts = [t for t in all_transcripts if not is_already_labeled(t)]
     skipped = len(all_transcripts) - len(transcripts)
 
-    if skipped > 0:
-        print(f"Skipping {skipped} already-labeled transcript(s)")
-
     failed = []
 
     if args.batch_size > 1:
@@ -431,7 +426,6 @@ def main() -> None:
             )
 
             for transcript, roles, label_mapping in results:
-                print(f"{roles} found for {transcript.filename}")
                 if roles is None:
                     failed.append(transcript.filename)
                 else:
@@ -446,7 +440,6 @@ def main() -> None:
                 thinking=thinking,
                 header_lines=args.header_lines,
             )
-            print(f"{roles} found for {transcript.filename}")
             if roles is None:
                 failed.append(transcript.filename)
             else:
@@ -457,7 +450,7 @@ def main() -> None:
         output_path = log_dir / "logs" / "failed_files.csv"
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        print(f"The following files could not be parsed: {failed}")
+        console.print(f"[yellow]Warning:[/yellow] The following files could not be parsed: {failed}")
 
         with open(output_path, "w", newline="") as f:
             writer = csv.writer(f, delimiter=",")
