@@ -15,6 +15,10 @@ To utilize the CLI scripts which require the vLLM dependency:
 ```bash
 pip install "labl-utils[cli] @ git+https://github.com/bentdixon/labl-utils.git" 
 ```
+To use the experimental branch (unstable):
+```bash
+pip install "labl-utils @ git+https://github.com/bentdixon/labl-utils.git@experimental"
+```
 
 ## Core Modules
 
