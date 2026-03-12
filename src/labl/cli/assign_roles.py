@@ -18,6 +18,7 @@ import re
 import csv
 import argparse
 from pathlib import Path
+from rich.progress import track
 from labl.transcripts import Transcript
 from vllm import LLM, SamplingParams
 
@@ -47,7 +48,7 @@ def normalize_speaker_labels(content: str) -> tuple[str, dict[str, str]]:
         mapping_dict maps normalized labels (S1, S2) back to original labels (SI, SP)
     """
     # Find all unique speaker labels at start of lines
-    speaker_pattern = r'^(S[IP\d]+):'
+    speaker_pattern = r'^(S[IP\d]+|Speaker\s+\d+):'
     speakers = set(re.findall(speaker_pattern, content, re.MULTILINE))
 
     # If all speakers are already in S1, S2, S3 format, no normalization needed
@@ -200,6 +201,7 @@ def classify_speaker_roles(
     sampling_params: SamplingParams,
     thinking: str | None,
     chars: int = 5000,
+    header_lines: int = 0,
 ) -> tuple[dict[str, str], dict[str, str]] | tuple[None, None]:
     """
     Classify speaker labels as PARTICIPANT or INTERVIEWER.
@@ -210,6 +212,7 @@ def classify_speaker_roles(
         sampling_params: vLLM sampling parameters
         thinking: Optional thinking/reasoning hint
         chars: Amount of text passed to the model
+        header_lines: Number of header lines to skip before passing content to the model
 
     Returns:
         Tuple of (roles_dict, label_mapping) or (None, None) on failure
@@ -217,7 +220,11 @@ def classify_speaker_roles(
         label_mapping maps normalized labels (S1, S2) to original labels (SI, SP)
     """
     with open(transcript.full_path, "r", encoding="utf-8") as f:
-        content = f.read()[:chars]
+        content = f.read()
+
+    if header_lines > 0:
+        content = "\n".join(content.split("\n")[header_lines:])
+    content = content[:chars]
 
     # Normalize speaker labels
     normalized_content, label_mapping = normalize_speaker_labels(content)
@@ -251,6 +258,7 @@ def classify_batch(
     sampling_params: SamplingParams,
     thinking: str | None,
     chars: int = 5000,
+    header_lines: int = 0,
 ) -> list[tuple[Transcript, dict[str, str] | None, dict[str, str]]]:
     """
     Classify speaker roles for a batch of transcripts.
@@ -264,6 +272,7 @@ def classify_batch(
         sampling_params: vLLM sampling parameters
         thinking: Optional thinking/reasoning hint
         chars: Amount of text passed to the model
+        header_lines: Number of header lines to skip before passing content to the model
 
     Returns:
         List of (transcript, roles, label_mapping) tuples
@@ -273,7 +282,11 @@ def classify_batch(
 
     for transcript in transcripts:
         with open(transcript.full_path, "r", encoding="utf-8") as f:
-            content = f.read()[:chars]
+            content = f.read()
+
+        if header_lines > 0:
+            content = "\n".join(content.split("\n")[header_lines:])
+        content = content[:chars]
 
         # Normalize speaker labels
         normalized_content, label_mapping = normalize_speaker_labels(content)
@@ -374,6 +387,12 @@ def main() -> None:
         default=1,
         help="Batch size for inference (1 for sequential, >1 for batched)",
     )
+    parser.add_argument(
+        "--header-lines",
+        type=int,
+        default=0,
+        help="Number of header lines to skip before passing content to the model",
+    )
     args = parser.parse_args()
 
     input_dir = Path(args.i)
@@ -401,13 +420,14 @@ def main() -> None:
 
     if args.batch_size > 1:
         # Batched processing
-        for i in range(0, len(transcripts), args.batch_size):
+        for i in track(range(0, len(transcripts), args.batch_size), description="Classifying roles..."):
             batch = transcripts[i : i + args.batch_size]
             results = classify_batch(
                 transcripts=batch,
                 llm=llm,
                 sampling_params=sampling_params,
                 thinking=thinking,
+                header_lines=args.header_lines,
             )
 
             for transcript, roles, label_mapping in results:
@@ -418,12 +438,13 @@ def main() -> None:
                     _write_output(transcript, roles, label_mapping, input_dir, output_dir)
     else:
         # Sequential processing (original behavior)
-        for transcript in transcripts:
+        for transcript in track(transcripts, description="Classifying roles..."):
             roles, label_mapping = classify_speaker_roles(
                 transcript=transcript,
                 llm=llm,
                 sampling_params=sampling_params,
                 thinking=thinking,
+                header_lines=args.header_lines,
             )
             print(f"{roles} found for {transcript.filename}")
             if roles is None:

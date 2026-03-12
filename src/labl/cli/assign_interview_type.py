@@ -19,6 +19,7 @@ import re
 import csv
 import argparse
 from pathlib import Path
+from rich.progress import track
 from labl.transcripts import Transcript
 from vllm import LLM, SamplingParams
 
@@ -281,7 +282,7 @@ def main() -> None:
 
     if args.batch_size > 1:
         # Batched processing
-        for i in range(0, len(transcripts), args.batch_size):
+        for i in track(range(0, len(transcripts), args.batch_size), description="Classifying interview types..."):
             batch = transcripts[i : i + args.batch_size]
             results = classify_batch(
                 transcripts=batch,
@@ -294,7 +295,7 @@ def main() -> None:
                 process_result(transcript, interview_type)
     else:
         # Sequential processing
-        for transcript in transcripts:
+        for transcript in track(transcripts, description="Classifying interview types..."):
             interview_type = classify_interview_type(
                 transcript=transcript,
                 llm=llm,
