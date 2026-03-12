@@ -35,8 +35,8 @@ def is_already_labeled(transcript: Transcript) -> bool:
     with open(transcript.full_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    has_participant = bool(re.search(r'^PARTICIPANT:', content, re.MULTILINE))
-    has_interviewer = bool(re.search(r'^INTERVIEWER:', content, re.MULTILINE))
+    has_participant = bool(re.search(r'^(?:\[.*?\]\s*)?PARTICIPANT:', content, re.MULTILINE))
+    has_interviewer = bool(re.search(r'^(?:\[.*?\]\s*)?INTERVIEWER:', content, re.MULTILINE))
 
     return has_participant and has_interviewer
 
@@ -51,7 +51,7 @@ def normalize_speaker_labels(content: str) -> tuple[str, dict[str, str]]:
         mapping_dict maps normalized labels (S1, S2) back to original labels (SI, SP)
     """
     # Find all unique speaker labels at start of lines
-    speaker_pattern = r'^(S[IP\d]+|Speaker\s+\d+):'
+    speaker_pattern = r'^(?:\[.*?\]\s*)?(S[IP\d]+|Speaker\s+\d+):'
     speakers = set(re.findall(speaker_pattern, content, re.MULTILINE))
 
     # If all speakers are already in S1, S2, S3 format, no normalization needed
@@ -77,8 +77,8 @@ def normalize_speaker_labels(content: str) -> tuple[str, dict[str, str]]:
     for original, normalized in mapping.items():
         # Use word boundary to avoid partial matches
         normalized_content = re.sub(
-            rf'^{re.escape(original)}:',
-            f'{normalized}:',
+            rf'^((?:\[.*?\]\s*)?){re.escape(original)}:',
+            rf'\1{normalized}:',
             normalized_content,
             flags=re.MULTILINE
         )
@@ -341,8 +341,8 @@ def _write_output(
         # Get the original label (SI, SP, etc.) or use normalized if no mapping
         original_label = label_mapping.get(normalized_label, normalized_label)
         content = re.sub(
-            rf"^{re.escape(original_label)}:",
-            f"{role}:",
+            rf"^((?:\[.*?\]\s*)?){re.escape(original_label)}:",
+            rf"\1{role}:",
             content,
             flags=re.MULTILINE
         )
