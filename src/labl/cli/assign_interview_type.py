@@ -77,15 +77,22 @@ def build_messages(
 The OPEN interviews typically:
 - Asks questions about the participant's experiences, thoughts, or feelings in a freely flowing format 
 - Has no set structure or order
+- Example: "Okay. So, um, {{REDACTED}}, uh, thank you, uh, for taking the time to talk to me. Um, like I mentioned, our conversation will be recorded for analysis. Um, and in this part, I'd like to get to know a bit more about you and learn what your life is like. Um, so how have things been going for you lately?"
+- Example: 
+"PARTICIPANT: 00:20:52.608 Yeah. She spreads out. Like, um, she lies out with, like, all of her paws and legs just completely spread, and she uses her paws to just push you and kick you. I d-don't know why, but yeah. Yeah. She does that.
+INTERVIEWER: 00:21:10.104 Oh, yeah. She sounds very cute, to be fair."
 
 The PSYCHS interviews typically:
 - Focuses on clinical symptoms such as anxiety, depression, hallucinations, paranoia, etc.
 - Has a linear progression
+- Example: "So since, um, the last visit, have you had the feeling that something odd is going on or that something is wrong?"
+- Example: "And have there been any times this month when you felt like things that were happening around you had a special meaning just for you?"
 
 If neither type of interview is identified, output UNKNOWN. 
 - Examples of interviews that are neither might be interviews that relate to cognitive tests, demographic information, etc. 
 - The questions will be neither truly open-ended or follow the PSYCHS protocol (a validated psychological scale) 
-- Please output UNKNOWN even if you are slightly unsure that it is neither - it is paramount we catch all cases of mis-identified cases
+- If the interviewer mentions scales from 0-10 or 0-100, it is UNKNOWN
+- Please output UNKNOWN even if you are slightly unsure that it is neither - it is paramount we catch all cases of mis-identified transcripts
 
 Transcript:
 {transcript_content}
