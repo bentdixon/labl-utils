@@ -171,7 +171,7 @@ def classify_batch(
     llm: LLM,
     sampling_params: SamplingParams,
     thinking: str | None,
-    chars: int = 10000,
+    chars: int = 100000,
 ) -> list[tuple[Transcript, str | None]]:
     """
     Classify interview types for a batch of transcripts.
@@ -202,6 +202,8 @@ def classify_batch(
     results = []
     for transcript, output in zip(transcripts, outputs):
         response = output.outputs[0].text.strip()
+
+        print(response[:100])
 
         interview_type = parse_interview_type(response)
 
