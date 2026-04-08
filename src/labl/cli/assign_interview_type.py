@@ -90,8 +90,11 @@ If neither type of interview is identified, output UNKNOWN.
 Transcript:
 {transcript_content}
 
-Based on the conversation pattern, classify the interview type. Respond with exactly one line in this format:
-{{INTERVIEW_TYPE}} where INTERVIEW_TYPE is either OPEN or PSYCHS or UNKNOWN. Put your final answer surrounded by curly braces (i.e., {{ and }})"""
+Based on the conversation pattern, classify the interview type. You may reason briefly, but your final line must be your answer in this exact format — curly braces included:
+
+{{OPEN}} or {{PSYCHS}} or {{UNKNOWN}}
+
+Example final line: {{PSYCHS}}"""
 
     if thinking is not None:
         system_prompt = f"{system_prompt}\nReasoning approach: {thinking}"
@@ -109,7 +112,7 @@ def parse_interview_type(response: str) -> str | None:
     Returns:
         "OPEN" or "PSYCHS", or None on failure.
     """
-    match = re.search(r"\{(OPEN|PSYCHS|UNKNOWN)\}", response, re.IGNORECASE)
+    match = re.search(r"\{(OPEN|PSYCHS|UNKNOWN)}", response, re.IGNORECASE)
     
     if match:
         return match.group(1).upper()
