@@ -91,7 +91,6 @@ The PSYCHS interviews typically:
 If neither type of interview is identified, output UNKNOWN. 
 - Examples of interviews that are neither might be interviews that relate to cognitive tests, demographic information, etc. 
 - The questions will be neither truly open-ended or follow the PSYCHS protocol (a validated psychological scale) 
-- If the interviewer mentions scales from 0-10 or 0-100, it is UNKNOWN
 - Please output UNKNOWN even if you are slightly unsure that it is neither - it is paramount we catch all cases of mis-identified transcripts
 
 Transcript:
