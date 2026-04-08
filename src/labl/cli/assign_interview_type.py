@@ -47,7 +47,7 @@ def load_model(
         model=model_name,
         tensor_parallel_size=tensor_parallel_size,
         gpu_memory_utilization=gpu_memory_utilization,
-        max_model_len=80000,
+        # max_model_len=80000,
         dtype="auto",
         trust_remote_code=True,
     )
@@ -81,11 +81,16 @@ The PSYCHS interviews typically:
 - Focuses on clinical symptoms such as anxiety, depression, hallucinations, paranoia, etc.
 - Has a linear progression
 
+If neither type of interview is identified, output UNKNOWN. 
+- Examples of interviews that are neither might be interviews that relate to cognitive tests, demographic information, etc. 
+- The questions will be neither truly open-ended or follow the PSYCHS protocol (a validated psychological scale) 
+- Please output UNKNOWN even if you are slightly unsure that it is neither - it is paramount we catch all cases of mis-identified cases
+
 Transcript:
 {transcript_content}
 
 Based on the conversation pattern, classify the interview type. Respond with exactly one line in this format:
-{{INTERVIEW_TYPE}} where INTERVIEW_TYPE is either OPEN or PSYCHS."""
+{{INTERVIEW_TYPE}} where INTERVIEW_TYPE is either OPEN or PSYCHS or UNKNOWN."""
 
     if thinking is not None:
         system_prompt = f"{system_prompt}\nReasoning approach: {thinking}"
@@ -103,13 +108,13 @@ def parse_interview_type(response: str) -> str | None:
     Returns:
         "OPEN" or "PSYCHS", or None on failure.
     """
-    match = re.search(r"\{(OPEN|PSYCHS)\}", response, re.IGNORECASE)
+    match = re.search(r"\{(OPEN|PSYCHS|UNKNOWN)\}", response, re.IGNORECASE)
     
     if match:
         return match.group(1).upper()
     
-    # Fallback: look for standalone OPEN or PSYCHS
-    match = re.search(r"\b(OPEN|PSYCHS)\b", response, re.IGNORECASE)
+    # Fallback: look for standalone OPEN or PSYCHS or UNKNOWN
+    match = re.search(r"\b(OPEN|PSYCHS|UNKNOWN)\b", response, re.IGNORECASE)
     if match:
         return match.group(1).upper()
     
@@ -124,7 +129,7 @@ def classify_interview_type(
     chars: int = 10000,
 ) -> str | None:
     """
-    Classify interview as OPEN or PSYCHS.
+    Classify interview as OPEN or PSYCHS or UNKNOWN.
     
     Args:
         transcript: Transcript object
@@ -134,7 +139,7 @@ def classify_interview_type(
         chars: Amount of text passed to the model
     
     Returns:
-        String with either "OPEN" or "PSYCHS", or None on failure
+        String with either "OPEN" or "PSYCHS" or "UNKNOWN", or None on failure
     """
     with open(transcript.full_path, "r", encoding="utf-8") as f:
         content = f.read()[:chars]
@@ -212,7 +217,7 @@ def classify_batch(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Decide interview type (OPEN or PSYCHS)",
+        description="Decide interview type (OPEN or PSYCHS or UNKNOWN)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--i", type=str, required=True, help="Input directory")
@@ -248,8 +253,8 @@ def main() -> None:
     llm = load_model(tensor_parallel_size=args.tp)
     
     sampling_params = SamplingParams(
-        max_tokens=200,
-        temperature=0.0,  # Deterministic output
+        max_tokens=250,
+        temperature=0.3,  # Low temperature for more deterministic output
     )
     
     Transcript.set_directory_path(input_dir)
@@ -258,6 +263,7 @@ def main() -> None:
     failed: list[tuple[str, str]] = []
     open_transcripts: list[dict[str, str]] = []
     psychs_transcripts: list[dict[str, str]] = []
+    unknown_transcripts: list[dict[str, str]] = []
 
     def process_result(transcript: Transcript, interview_type: str | None) -> None:
         """Process a single classification result."""
@@ -270,6 +276,11 @@ def main() -> None:
             })
         elif interview_type == "PSYCHS":
             psychs_transcripts.append({
+                "patient_id": transcript.patient_id,
+                "filename": str(transcript.full_path),
+            })
+        elif interview_type == "UNKNOWN":
+            unknown_transcripts.append({
                 "patient_id": transcript.patient_id,
                 "filename": str(transcript.full_path),
             })
@@ -312,6 +323,12 @@ def main() -> None:
         writer = csv.DictWriter(f, fieldnames=["patient_id", "filename"])
         writer.writeheader()
         writer.writerows(psychs_transcripts)
+    # Write UNKNOWNS CSV
+    unknowns_csv_path = output_dir / "unknown_interviews.csv"
+    with open(unknowns_csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["patient_id", "filename"])
+        writer.writeheader()
+        writer.writerows(unknown_transcripts)
 
     # Report failures
     if failed:
