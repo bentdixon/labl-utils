@@ -47,7 +47,7 @@ def load_model(
         model=model_name,
         tensor_parallel_size=tensor_parallel_size,
         gpu_memory_utilization=gpu_memory_utilization,
-        max_model_len=80000,
+        # max_model_len=80000,
         dtype="auto",
         trust_remote_code=True,
         enable_prefix_caching=True
@@ -72,10 +72,10 @@ def build_messages(
     """
     system_prompt = "You are a trained clinical annotator. Only respond in the format prescribed. Keep your reasoning succinct."
     
-    user_prompt = f"""Analyze the following transcript excerpt and determine whether it is an OPEN or PSYCHS interview.
+    user_prompt = f"""Analyze the following transcript excerpt and determine whether it is an OPEN or PSYCHS or UNKNOWN interview.
 
 The OPEN interviews typically:
-- Asks questions about the participant's experiences, thoughts, or feelings in a freely flowing format
+- Asks questions about the participant's experiences, thoughts, or feelings in a freely flowing format 
 - Has no set structure or order
 
 The PSYCHS interviews typically:
@@ -127,7 +127,7 @@ def classify_interview_type(
     llm: LLM,
     sampling_params: SamplingParams,
     thinking: str | None,
-    chars: int = 10000,
+    chars: int = 100000,
 ) -> str | None:
     """
     Classify interview as OPEN or PSYCHS or UNKNOWN.
