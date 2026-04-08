@@ -130,23 +130,21 @@ def classify_interview_type(
     llm: LLM,
     sampling_params: SamplingParams,
     thinking: str | None,
-    chars: int = 100000,
 ) -> str | None:
     """
     Classify interview as OPEN or PSYCHS or UNKNOWN.
-    
+
     Args:
         transcript: Transcript object
         llm: vLLM LLM instance
         sampling_params: vLLM sampling parameters
         thinking: Optional thinking/reasoning hint
-        chars: Amount of text passed to the model
-    
+
     Returns:
         String with either "OPEN" or "PSYCHS" or "UNKNOWN", or None on failure
     """
     with open(transcript.full_path, "r", encoding="utf-8") as f:
-        content = f.read()[:chars]
+        content = f.read()
 
     messages = build_messages(content, thinking)
     
@@ -174,25 +172,23 @@ def classify_batch(
     llm: LLM,
     sampling_params: SamplingParams,
     thinking: str | None,
-    chars: int = 100000,
 ) -> list[tuple[Transcript, str | None]]:
     """
     Classify interview types for a batch of transcripts.
-    
+
     Args:
         transcripts: List of Transcript objects
         llm: vLLM LLM instance
         sampling_params: vLLM sampling parameters
         thinking: Optional thinking/reasoning hint
-        chars: Amount of text passed to the model
-    
+
     Returns:
         List of (transcript, interview_type) tuples
     """
     all_messages = []
     for transcript in transcripts:
         with open(transcript.full_path, "r", encoding="utf-8") as f:
-            content = f.read()[:chars]
+            content = f.read()
         messages = build_messages(content, thinking)
         all_messages.append(messages)
     
@@ -259,7 +255,7 @@ def main() -> None:
     llm = load_model(tensor_parallel_size=args.tp)
     
     sampling_params = SamplingParams(
-        max_tokens=250,
+        max_tokens=1000,
         temperature=0.3,  # Low temperature for more deterministic output
     )
     
