@@ -203,7 +203,7 @@ def classify_batch(
     for transcript, output in zip(transcripts, outputs):
         response = output.outputs[0].text.strip()
 
-        print(response[:100])
+        print(response[-300:])
 
         interview_type = parse_interview_type(response)
 
