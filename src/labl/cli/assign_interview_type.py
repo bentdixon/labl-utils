@@ -47,7 +47,7 @@ def load_model(
         model=model_name,
         tensor_parallel_size=tensor_parallel_size,
         gpu_memory_utilization=gpu_memory_utilization,
-        # max_model_len=80000,
+        max_model_len=80000,
         dtype="auto",
         trust_remote_code=True,
         enable_prefix_caching=True
