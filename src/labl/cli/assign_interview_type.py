@@ -50,6 +50,7 @@ def load_model(
         # max_model_len=80000,
         dtype="auto",
         trust_remote_code=True,
+        enable_prefix_caching=True
     )
     
     return llm
