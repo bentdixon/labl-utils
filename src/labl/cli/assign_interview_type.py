@@ -115,9 +115,9 @@ def parse_interview_type(response: str) -> str | None:
         return match.group(1).upper()
     
     # Fallback: look for standalone OPEN or PSYCHS or UNKNOWN
-    match = re.search(r"\b(OPEN|PSYCHS|UNKNOWN)\b", response, re.IGNORECASE)
-    if match:
-        return match.group(1).upper()
+    # match = re.search(r"\b(OPEN|PSYCHS|UNKNOWN)\b", response, re.IGNORECASE)
+    # if match:
+    #     return match.group(1).upper()
     
     return None
 
