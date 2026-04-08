@@ -91,7 +91,7 @@ Transcript:
 {transcript_content}
 
 Based on the conversation pattern, classify the interview type. Respond with exactly one line in this format:
-{{INTERVIEW_TYPE}} where INTERVIEW_TYPE is either OPEN or PSYCHS or UNKNOWN."""
+{{INTERVIEW_TYPE}} where INTERVIEW_TYPE is either OPEN or PSYCHS or UNKNOWN. Put your final answer surrounded by curly braces (i.e., {{ and }})"""
 
     if thinking is not None:
         system_prompt = f"{system_prompt}\nReasoning approach: {thinking}"
