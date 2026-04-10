@@ -111,17 +111,14 @@ class Transcript:
         return [line for line in self.lines if line.speaker == "PARTICIPANT"]
 
     @classmethod
-    def load_demographics(cls) -> "pl.DataFrame | None":
-        """
-        Load the demographics CSV from cls.demographics_path.
-        Result is cached on the class; subsequent calls return the cached DataFrame.
-        Returns None if demographics_path is not set.
-        """
-        if cls._demographics is not None:
-            return cls._demographics
-        if cls.demographics_path is None:
-            return None
-        cls._demographics = pl.read_csv(cls.demographics_path)
+    def load_demographics(cls):
+        if cls._demographics is None:
+            df = pl.read_csv(cls.demographics_path, infer_schema_length=0)
+            # Cast checkbox columns (race, gender) back to Int64
+            checkbox_cols = [c for c in df.columns if
+                             c.startswith(("chrdemo_racial_back___", "chrdemo_gender_identity___"))]
+            df = df.with_columns([pl.col(c).cast(pl.Int64, strict=False) for c in checkbox_cols])
+            cls._demographics = df
         return cls._demographics
 
     def _get_site(self) -> str | None:
