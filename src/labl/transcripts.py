@@ -47,6 +47,7 @@ class Transcript:
     demographics_path: Path | None = None
     _demographics: "pl.DataFrame | None" = None
     _warning_shown: bool = False
+    _demographics_warning_shown: bool = False
 
     @classmethod
     def set_directory_path(cls, path: str | Path) -> None:
@@ -55,6 +56,7 @@ class Transcript:
     @classmethod
     def set_demographics_path(cls, path: str | Path) -> None:
         cls.demographics_path = Path(path)
+        cls._demographics = None  # invalidate cache if path changes
 
     @classmethod
     def list_transcripts(cls, text_type: str | None = None) -> list:
@@ -74,33 +76,22 @@ class Transcript:
                 print("directory_path is not set, call Transcript.set_directory_path() first and point towards the transcript directory. (This warning will only display once.)")
                 Transcript._warning_shown = True
             self.filename: str | Path = filename
-            self.full_path: Path = Path(filename) # identical
-            self.group_status: ClinicalGroup = self._get_clinical_status()
-            self.patient_id = self._get_id()
-            self.lines = self._get_text()
-            self.site = self._get_site()
-            self.language = self._get_language()
-            self.session = self._get_session()
-            self.day = self._get_day()
-            self.transcript_type = self._get_transcript_type()
-            self.age = self._get_age()
-            self.race = self._get_race()
-            self.gender = self._get_gender()
-
+            self.full_path: Path = Path(filename)
         else:
             self.filename: str | Path = filename
             self.full_path: Path = Transcript.directory_path / filename
-            self.group_status: ClinicalGroup = self._get_clinical_status()
-            self.patient_id = self._get_id()
-            self.lines = self._get_text()
-            self.site = self._get_site()
-            self.language = self._get_language()
-            self.session = self._get_session()
-            self.day = self._get_day()
-            self.transcript_type = self._get_transcript_type()
-            self.age = self._get_age()
-            self.race = self._get_race()
-            self.gender = self._get_gender()
+
+        self.group_status: ClinicalGroup = self._get_clinical_status()
+        self.patient_id = self._get_id()
+        self.lines = self._get_text()
+        self.site = self._get_site()
+        self.language = self._get_language()
+        self.session = self._get_session()
+        self.day = self._get_day()
+        self.transcript_type = self._get_transcript_type()
+        self.age = self._get_age()
+        self.race = self._get_race()
+        self.gender = self._get_gender()
 
     @cached_property
     def interviewer_lines(self) -> list[TranscriptLine]:
@@ -112,6 +103,11 @@ class Transcript:
 
     @classmethod
     def load_demographics(cls):
+        if cls.demographics_path is None:
+            if not cls._demographics_warning_shown:
+                print("demographics_path is not set, call Transcript.set_demographics_path() first to populate age/race/gender fields. (This warning will only display once.)")
+                cls._demographics_warning_shown = True
+            return None
         if cls._demographics is None:
             df = pl.read_csv(cls.demographics_path, infer_schema_length=0)
             # Cast checkbox columns (race, gender) back to Int64
@@ -136,7 +132,6 @@ class Transcript:
                 return ClinicalGroup.CHR
             elif 'HC' in parent.name.upper():
                 return ClinicalGroup.HC
-        # print(f"ClinicalGroup not found for {self.full_path}, defaulting to UNKNOWN")
         return ClinicalGroup.UNKNOWN
 
     def _get_id(self) -> str | None:
@@ -175,14 +170,14 @@ class Transcript:
 
     def _get_session(self) -> str | None:
         try:
-            session = os.path.basename(self.full_path).split("_")[5] 
+            session = os.path.basename(self.full_path).split("_")[5]
             return session
         except IndexError as e:
             print(f"Error: {e}\nTranscript: {self.filename}")
             return None
 
     def _get_day(self) -> str | None:
-        try:    
+        try:
             day = os.path.basename(self.full_path).split("_")[4]
             return day
         except IndexError as e:
@@ -246,4 +241,3 @@ class Transcript:
             return None
         row = rows.row(0, named=True)
         return [label for col, label in _GENDER_COLUMNS.items() if row.get(col) == 1] or None
-
