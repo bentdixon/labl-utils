@@ -191,14 +191,16 @@ class Transcript:
 
     def _get_transcript_type(self) -> str | None:
         try:
-            if os.path.basename(self.full_path).split("_")[3] == "psychs" | "open":
-                return transcript_type
-            elif os.path.basename(self.full_path).split("_")[2] == "audioJournal":
-                return transcript_type
-            else:
-                return "UNKNOWN"
+            base_name = os.path.basename(self.full_path)
+            parts = base_name.split("_")
+            if len(parts) > 3 and parts[3] in ("psychs", "open"):
+                return parts[3]
+            if len(parts) > 2 and parts[2] == "audioJournal":
+                return parts[2]
+            return "UNKNOWN"
         except IndexError as e:
-            print(f"Error: {e}\nTranscript: {self.filename}")
+            print(f"Index error parsing file: {e}")
+            print(f"Full path evaluated: {self.full_path}")
             return None
 
     def _get_language(self) -> Language:
