@@ -191,8 +191,12 @@ class Transcript:
 
     def _get_transcript_type(self) -> str | None:
         try:
-            transcript_type = os.path.basename(self.full_path).split("_")[3]
-            return transcript_type
+            if os.path.basename(self.full_path).split("_")[3] == "psychs" | "open":
+                return transcript_type
+            elif os.path.basename(self.full_path).split("_")[2] == "audioJournal":
+                return transcript_type
+            else:
+                return "UNKNOWN"
         except IndexError as e:
             print(f"Error: {e}\nTranscript: {self.filename}")
             return None
