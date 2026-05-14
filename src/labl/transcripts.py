@@ -178,8 +178,13 @@ class Transcript:
 
     def _get_day(self) -> str | None:
         try:
-            day = os.path.basename(self.full_path).split("_")[4]
-            return day
+            day_4 = os.path.basename(self.full_path).split("_")[4]
+            day_3 = os.path.basename(self.full_path).split("_")[3]
+            if "day" in day_4:
+                return day_4
+            elif "day" in day_3:
+                return day_3
+            return "UNKNOWN"
         except IndexError as e:
             print(f"Error: {e}\nTranscript: {self.filename}")
             return None
