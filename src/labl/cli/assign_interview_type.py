@@ -47,9 +47,10 @@ def load_model(
         model=model_name,
         tensor_parallel_size=tensor_parallel_size,
         gpu_memory_utilization=gpu_memory_utilization,
-        max_model_len=80000,
+        # max_model_len=80000,
         dtype="auto",
         trust_remote_code=True,
+        enable_prefix_caching=True
     )
     
     return llm
@@ -71,21 +72,35 @@ def build_messages(
     """
     system_prompt = "You are a trained clinical annotator. Only respond in the format prescribed. Keep your reasoning succinct."
     
-    user_prompt = f"""Analyze the following transcript excerpt and determine whether it is an OPEN or PSYCHS interview.
+    user_prompt = f"""Analyze the following transcript excerpt and determine whether it is an OPEN or PSYCHS or UNKNOWN interview.
 
 The OPEN interviews typically:
-- Asks questions about the participant's experiences, thoughts, or feelings in a freely flowing format
+- Asks questions about the participant's experiences, thoughts, or feelings in a freely flowing format 
 - Has no set structure or order
+- Example: "Okay. So, um, {{REDACTED}}, uh, thank you, uh, for taking the time to talk to me. Um, like I mentioned, our conversation will be recorded for analysis. Um, and in this part, I'd like to get to know a bit more about you and learn what your life is like. Um, so how have things been going for you lately?"
+- Example: 
+"PARTICIPANT: 00:20:52.608 Yeah. She spreads out. Like, um, she lies out with, like, all of her paws and legs just completely spread, and she uses her paws to just push you and kick you. I d-don't know why, but yeah. Yeah. She does that.
+INTERVIEWER: 00:21:10.104 Oh, yeah. She sounds very cute, to be fair."
 
 The PSYCHS interviews typically:
 - Focuses on clinical symptoms such as anxiety, depression, hallucinations, paranoia, etc.
 - Has a linear progression
+- Example: "So since, um, the last visit, have you had the feeling that something odd is going on or that something is wrong?"
+- Example: "And have there been any times this month when you felt like things that were happening around you had a special meaning just for you?"
+
+If neither type of interview is identified, output UNKNOWN. 
+- Examples of interviews that are neither might be interviews that relate to cognitive tests, demographic information, etc. 
+- The questions will be neither truly open-ended or follow the PSYCHS protocol (a validated psychological scale) 
+- Please output UNKNOWN even if you are slightly unsure that it is neither - it is paramount we catch all cases of mis-identified transcripts
 
 Transcript:
 {transcript_content}
 
-Based on the conversation pattern, classify the interview type. Respond with exactly one line in this format:
-{{INTERVIEW_TYPE}} where INTERVIEW_TYPE is either OPEN or PSYCHS."""
+Based on the conversation pattern, classify the interview type. You may reason briefly, but your final line must be your answer in this exact format — curly braces included:
+
+{{OPEN}} or {{PSYCHS}} or {{UNKNOWN}}
+
+Example final line: {{PSYCHS}}"""
 
     if thinking is not None:
         system_prompt = f"{system_prompt}\nReasoning approach: {thinking}"
@@ -103,15 +118,15 @@ def parse_interview_type(response: str) -> str | None:
     Returns:
         "OPEN" or "PSYCHS", or None on failure.
     """
-    match = re.search(r"\{(OPEN|PSYCHS)\}", response, re.IGNORECASE)
+    match = re.search(r"\{(OPEN|PSYCHS|UNKNOWN)}", response, re.IGNORECASE)
     
     if match:
         return match.group(1).upper()
     
-    # Fallback: look for standalone OPEN or PSYCHS
-    match = re.search(r"\b(OPEN|PSYCHS)\b", response, re.IGNORECASE)
-    if match:
-        return match.group(1).upper()
+    # Fallback: look for standalone OPEN or PSYCHS or UNKNOWN
+    # match = re.search(r"\b(OPEN|PSYCHS|UNKNOWN)\b", response, re.IGNORECASE)
+    # if match:
+    #     return match.group(1).upper()
     
     return None
 
@@ -121,23 +136,21 @@ def classify_interview_type(
     llm: LLM,
     sampling_params: SamplingParams,
     thinking: str | None,
-    chars: int = 10000,
 ) -> str | None:
     """
-    Classify interview as OPEN or PSYCHS.
-    
+    Classify interview as OPEN or PSYCHS or UNKNOWN.
+
     Args:
         transcript: Transcript object
         llm: vLLM LLM instance
         sampling_params: vLLM sampling parameters
         thinking: Optional thinking/reasoning hint
-        chars: Amount of text passed to the model
-    
+
     Returns:
-        String with either "OPEN" or "PSYCHS", or None on failure
+        String with either "OPEN" or "PSYCHS" or "UNKNOWN", or None on failure
     """
     with open(transcript.full_path, "r", encoding="utf-8") as f:
-        content = f.read()[:chars]
+        content = f.read()
 
     messages = build_messages(content, thinking)
     
@@ -165,25 +178,23 @@ def classify_batch(
     llm: LLM,
     sampling_params: SamplingParams,
     thinking: str | None,
-    chars: int = 10000,
 ) -> list[tuple[Transcript, str | None]]:
     """
     Classify interview types for a batch of transcripts.
-    
+
     Args:
         transcripts: List of Transcript objects
         llm: vLLM LLM instance
         sampling_params: vLLM sampling parameters
         thinking: Optional thinking/reasoning hint
-        chars: Amount of text passed to the model
-    
+
     Returns:
         List of (transcript, interview_type) tuples
     """
     all_messages = []
     for transcript in transcripts:
         with open(transcript.full_path, "r", encoding="utf-8") as f:
-            content = f.read()[:chars]
+            content = f.read()
         messages = build_messages(content, thinking)
         all_messages.append(messages)
     
@@ -196,6 +207,8 @@ def classify_batch(
     results = []
     for transcript, output in zip(transcripts, outputs):
         response = output.outputs[0].text.strip()
+
+        print(response[-300:])
 
         interview_type = parse_interview_type(response)
 
@@ -212,7 +225,7 @@ def classify_batch(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Decide interview type (OPEN or PSYCHS)",
+        description="Decide interview type (OPEN or PSYCHS or UNKNOWN)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--i", type=str, required=True, help="Input directory")
@@ -248,8 +261,8 @@ def main() -> None:
     llm = load_model(tensor_parallel_size=args.tp)
     
     sampling_params = SamplingParams(
-        max_tokens=200,
-        temperature=0.0,  # Deterministic output
+        max_tokens=1000,
+        temperature=0.3,  # Low temperature for more deterministic output
     )
     
     Transcript.set_directory_path(input_dir)
@@ -258,6 +271,7 @@ def main() -> None:
     failed: list[tuple[str, str]] = []
     open_transcripts: list[dict[str, str]] = []
     psychs_transcripts: list[dict[str, str]] = []
+    unknown_transcripts: list[dict[str, str]] = []
 
     def process_result(transcript: Transcript, interview_type: str | None) -> None:
         """Process a single classification result."""
@@ -270,6 +284,11 @@ def main() -> None:
             })
         elif interview_type == "PSYCHS":
             psychs_transcripts.append({
+                "patient_id": transcript.patient_id,
+                "filename": str(transcript.full_path),
+            })
+        elif interview_type == "UNKNOWN":
+            unknown_transcripts.append({
                 "patient_id": transcript.patient_id,
                 "filename": str(transcript.full_path),
             })
@@ -312,6 +331,12 @@ def main() -> None:
         writer = csv.DictWriter(f, fieldnames=["patient_id", "filename"])
         writer.writeheader()
         writer.writerows(psychs_transcripts)
+    # Write UNKNOWNS CSV
+    unknowns_csv_path = output_dir / "unknown_interviews.csv"
+    with open(unknowns_csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["patient_id", "filename"])
+        writer.writeheader()
+        writer.writerows(unknown_transcripts)
 
     # Report failures
     if failed:
