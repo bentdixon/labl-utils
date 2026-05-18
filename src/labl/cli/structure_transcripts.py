@@ -97,7 +97,7 @@ def set_clinical_status(transcript: Transcript, status_map: dict[str, ClinicalGr
     transcript.group_status = ClinicalGroup.UNKNOWN
 
 
-def set_language(transcript: Transcript) -> None:
+def set_language(transcript: Transcript, force: bool = False) -> None:
     language = determine_language(transcript)
 
     if transcript.site is None:
@@ -105,7 +105,7 @@ def set_language(transcript: Transcript) -> None:
         transcript.language = language
     else:
         langs = SITE_CODE_TO_LANGUAGES.get(transcript.site, (Language.UNKNOWN,))
-        if language in langs: 
+        if language in langs:
             transcript.language = language
         else:
             console.print(f"[yellow]Warning:[/yellow] Language not found.")
@@ -113,14 +113,19 @@ def set_language(transcript: Transcript) -> None:
             console.print(f"[yellow]  transcript:[/yellow] {transcript.filename}")
             console.print(f"[yellow]  site:[/yellow] {transcript.site}")
             console.print(f"[yellow]  languages in site:[/yellow] {langs}")
-            transcript.language = Language.UNKNOWN
-            console.print(f"[yellow]  Continuing...[/yellow]")
+            if force:
+                transcript.language = language
+                console.print(f"[yellow]  --force set: assigning {language} anyway.[/yellow]")
+            else:
+                transcript.language = Language.UNKNOWN
+                console.print(f"[yellow]  Continuing...[/yellow]")
 
 
 def structure_transcripts(
     dirpath: Path,
     csv_paths: list[Path] | None,
-    text_type: str
+    text_type: str,
+    force: bool = False
 ) -> dict[str, dict[str, dict[str, list[Transcript]]]]:
     """
     Build nested structure: {text_type: {language_name: {clinical_group: [transcripts]}}}
@@ -146,7 +151,7 @@ def structure_transcripts(
         for t in txt_files:
             transcript = Transcript(t)
             set_clinical_status(transcript, status_map)
-            set_language(transcript)
+            set_language(transcript, force=force)
 
             lang_name = str(transcript.language)
             group_name = str(transcript.group_status)
@@ -241,6 +246,8 @@ def main() -> None:
                         help="One or more CSVs with patient_id and clinical_status columns")
     parser.add_argument("--text-type", type=str, required=True, help="Transcript text type")
     parser.add_argument("--gpu", type=int, required=True)
+    parser.add_argument("--force", action="store_true",
+                        help="Assign language identified by Stanza even when it does not match the site's expected languages.")
     args = parser.parse_args()
 
     input_path = Path(args.i)
@@ -264,7 +271,8 @@ def main() -> None:
     output_struct = structure_transcripts(
         dirpath=input_path,
         csv_paths=csv_paths,
-        text_type=args.text_type
+        text_type=args.text_type,
+        force=args.force
     )
 
     if not output_struct:
